@@ -24,6 +24,7 @@ import { ImageStyleKey, TypoStyleKey, AspectRatioKey, BasePedestalKey, PromptCon
 import headlinesData from '@/data/headlines.json';
 import { TYPOGRAPHY_STYLES, TypographyStyleItem } from '@/data/typographyStyles';
 import { BACKGROUND_STYLES, BackgroundStyleItem } from '@/data/backgroundStyles';
+import { BrandProfile, INITIAL_BRANDS } from '@/data/brands';
 import { PEDESTAL_OPTIONS, PedestalItem } from '@/data/pedestals';
 
 interface HeadlineItem {
@@ -36,6 +37,7 @@ const ALL_HEADLINES: HeadlineItem[] = headlinesData as HeadlineItem[];
 interface PromptWizardModalProps {
   isOpen: boolean;
   initialStep?: 1 | 2 | 3 | 4;
+  activeBrand?: BrandProfile;
   onClose: () => void;
   onSavePrompt: (config: PromptConfig) => void;
 }
@@ -43,9 +45,11 @@ interface PromptWizardModalProps {
 export const PromptWizardModal: React.FC<PromptWizardModalProps> = ({
   isOpen,
   initialStep = 1,
+  activeBrand,
   onClose,
   onSavePrompt
 }) => {
+  const currentBrand = activeBrand || INITIAL_BRANDS[0];
   // Step state: 1 (Headline), 2 (Typography with Real Previews), 3 (Canvas, Pedestal & Ratio with Real Previews), 4 (Result)
   const [step, setStep] = useState<1 | 2 | 3 | 4>(initialStep);
 
@@ -72,9 +76,48 @@ export const PromptWizardModal: React.FC<PromptWizardModalProps> = ({
   // Text scale option: 'refined' (modest/small with lots of space), 'medium' (balanced), 'large' (bold)
   const [textSizeOption, setTextSizeOption] = useState<'refined' | 'medium' | 'large'>('refined');
 
-  // Filter headlines by category & search query
+  // In-App Direct Generation States
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  const handleGenerateInApp = async () => {
+    if (!finalPrompt) return;
+    setIsGenerating(true);
+    setGenerateError(null);
+    try {
+      const savedKey = typeof window !== 'undefined' ? localStorage.getItem('cake_slice_gemini_key') || '' : '';
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: savedKey,
+          prompt: finalPrompt
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.imageUrl) {
+        setGeneratedImageUrl(data.imageUrl);
+      } else {
+        setGenerateError(data.error || 'জেনারেশন সম্পন্ন হয়নি। Gemini-তে চেষ্টা করুন।');
+      }
+    } catch {
+      setGenerateError('সার্ভারে সাময়িক সমস্যা। প্রম্পটটি কপি করে Gemini-তে পেস্ট করুন।');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Filter headlines by category & search query (merging brand specific headlines)
+  const combinedHeadlines = useMemo(() => {
+    const brandList = currentBrand.defaultHeadlines || [];
+    const brandTexts = new Set(brandList.map(b => b.text));
+    const rest = ALL_HEADLINES.filter(h => !brandTexts.has(h.text));
+    return [...brandList, ...rest];
+  }, [currentBrand]);
+
   const filteredHeadlines = useMemo(() => {
-    return ALL_HEADLINES.filter((item) => {
+    return combinedHeadlines.filter((item) => {
       const matchesCat = selectedCategory === 'all' || item.cat === selectedCategory;
       const matchesSearch = !searchQuery.trim() || item.text.toLowerCase().includes(searchQuery.trim().toLowerCase());
       return matchesCat && matchesSearch;
@@ -113,11 +156,11 @@ export const PromptWizardModal: React.FC<PromptWizardModalProps> = ({
     if (item) setSelectedHeadline(item.text);
   };
 
-  // Generate Master Prompt based strictly on Chat 1 & Chat 2 Approved Formats
+  // Generate Master Prompt based on World-Class Art Direction System
   const buildPrompt = (
     mode: 'full' | 'composition',
     headline: string,
-    currentBrand: 'none' | 'subtle' | 'full' = brandOption,
+    currentBrandOption: 'none' | 'subtle' | 'full' = brandOption,
     currentSize: 'refined' | 'medium' | 'large' = textSizeOption
   ): string => {
     const pedestalText = currentPedestalObj.promptDescription;
@@ -125,15 +168,16 @@ export const PromptWizardModal: React.FC<PromptWizardModalProps> = ({
     const lightingDesc = currentBgObj.promptLightingDesc;
     const typoTreatmentDesc = currentTypoObj.treatmentPrompt;
 
-    // Specific visual description of the actual brand cake — injected for high-fidelity preservation
-    const cakeVisualDesc = 'The cake is a round celebration cake with: white smooth frosting on top featuring crossword-style piped lettering in dark chocolate, ocean teal-blue textured buttercream sides scattered with blue candy dots and white pearl sprinkles, elegant gold leaf foil accents at the base band, and a golden acrylic calligraphy topper in the front.';
+    // Dynamic product visual preservation description tailored to the active brand
+    const productPreserveDesc = currentBrand.preservationPrompt;
+    const productNoun = currentBrand.productTypeEn.toLowerCase();
 
-    const preservationBlock = `CRITICAL CAKE PRESERVATION:\nKeep the cake from the uploaded photo 100% authentic and unaltered—preserve its exact frosting textures, colors, piping decorations, and topper in high-fidelity without AI re-imagination or distortion. ${cakeVisualDesc}`;
+    const preservationBlock = `CRITICAL PRODUCT PRESERVATION:\nKeep the ${productNoun} from the uploaded raw photo 100% authentic and unaltered—preserve its exact ${productPreserveDesc}. Zero AI re-imagination, zero artificial distortion.`;
 
-    const compositionBlock = `COMPOSITION & CANVAS (Aspect Ratio: ${selectedRatio}):\nThe cake sits gracefully in the bottom 25% of the frame, resting naturally on ${pedestalText}. The top 75% of the canvas MUST be completely empty, ${backgroundDesc}. High-end luxury magazine editorial layout, zero clutter, and no random props.`;
+    const compositionBlock = `COMPOSITION & CANVAS (Aspect Ratio: ${selectedRatio}):\nThe ${productNoun} rests gracefully in the bottom 25% of the frame, resting naturally on ${pedestalText}. The top 75% of the canvas MUST be completely empty, ${backgroundDesc}. High-end luxury magazine editorial layout, zero clutter, and no random props.`;
 
     if (mode === 'composition') {
-      return `Act as a world-class Art Director for my luxury bakery brand "Cake Slice by Farjana". Refer to the attached raw photo of my cake.
+      return `Act as a world-class Art Director for my luxury ${currentBrand.productTypeEn} brand "${currentBrand.nameEn}". Refer to the attached raw photo of my product.
 
 ${preservationBlock}
 
@@ -148,17 +192,17 @@ High-end luxury magazine advertising photograph, 8k resolution, photorealistic. 
     }
 
     let brandInstruction = '';
-    if (currentBrand === 'none') {
+    if (currentBrandOption === 'none') {
       brandInstruction = `STRICT TEXT & BRANDING RULES (NO EXTRA LOGOS OR BRAND TEXT):
 Render ONLY the single emotional Bengali headline: "${headline}".
-Strictly DO NOT generate "Cake Slice by Farjana", "কেক স্লাইস", "বাই ফারজানা", or any English or bakery brand name text anywhere in the image. No bakery subheadings, no secondary logos. Keep the canvas clean with ONLY this single headline.`;
-    } else if (currentBrand === 'subtle') {
+Strictly DO NOT generate "${currentBrand.nameEn}", "${currentBrand.nameBn}", or any English or brand name text anywhere in the image. No secondary subheadings, no logos. Keep the canvas clean with ONLY this single headline.`;
+    } else if (currentBrandOption === 'subtle') {
       brandInstruction = `BRAND SIGNATURE:
 Primary headline: "${headline}".
-Far below the headline or in a quiet lower corner, place an ultra-small, discreet, minimalist micro-signature: "কেক স্লাইস বাই ফারজানা" (tiny subtle font size, strictly understated, never competing with or overpowering the headline).`;
+Far below the headline or in a quiet lower corner, place an ultra-small, discreet, minimalist micro-signature: "${currentBrand.nameBn}" (tiny subtle font size, strictly understated, never competing with or overpowering the headline).`;
     } else {
       brandInstruction = `BRANDING:
-Feature the headline "${headline}" with a balanced, modest subtitle "কেক স্লাইস বাই ফারজানা" underneath (kept tasteful, medium-small, and never oversized).`;
+Feature the headline "${headline}" with a balanced, modest subtitle "${currentBrand.nameBn}" underneath (kept tasteful, medium-small, and never oversized).`;
     }
 
     let sizeInstruction = '';
@@ -182,7 +226,7 @@ ${brandInstruction}
 
 ${sizeInstruction}`;
 
-    return `Act as a world-class Art Director for my luxury bakery brand "Cake Slice by Farjana". Refer to the attached raw photo of my cake.
+    return `Act as a world-class Art Director for my luxury ${currentBrand.productTypeEn} brand "${currentBrand.nameEn}". Refer to the attached raw photo of my product.
 
 ${preservationBlock}
 
@@ -197,7 +241,7 @@ High-end luxury magazine advertising photograph, 8k resolution, photorealistic. 
   };
 
   const handleGenerate = () => {
-    const headline = selectedHeadline.trim() || 'প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি';
+    const headline = selectedHeadline.trim() || (currentBrand.defaultHeadlines[0]?.text || 'এক চিলতে মিষ্টি হাসি');
 
     const prompt = buildPrompt(promptMode, headline, brandOption, textSizeOption);
 
@@ -213,6 +257,8 @@ High-end luxury magazine advertising photograph, 8k resolution, photorealistic. 
       ratio: selectedRatio,
       brandOption,
       textSizeOption,
+      brandId: currentBrand.id,
+      brandName: currentBrand.nameBn,
       generatedPrompt: prompt,
       createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
@@ -780,22 +826,42 @@ High-end luxury magazine advertising photograph, 8k resolution, photorealistic. 
                   </h3>
                 </div>
 
-                <button
-                  onClick={handleCopyAndOpenGemini}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                      কপি হয়েছে!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      কপি ও জেমিনি খুলুন 🚀
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleGenerateInApp}
+                    disabled={isGenerating}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/15 active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                        <span>রেন্ডার হচ্ছে...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>⚡ সরাসরি ছবি তৈরি</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={handleCopyAndOpenGemini}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-[#1B1824] hover:bg-[#252230] text-amber-300 border border-amber-500/40 hover:border-amber-500 font-bold text-xs rounded-xl transition-all active:scale-95"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400">কপি হয়েছে</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>কপি ও জেমিনি ↗</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Selection Summary Pill with Previews */}
@@ -848,6 +914,44 @@ High-end luxury magazine advertising photograph, 8k resolution, photorealistic. 
                   🎨 শুধু কম্পোজিশন (রিকমেন্ডেড)
                 </button>
               </div>
+
+              {/* In-App Generated Image Preview (if generated) */}
+              {generatedImageUrl && (
+                <div className="p-3.5 rounded-2xl bg-[#110F16] border-2 border-emerald-500/40 space-y-2.5 animate-fade-in shadow-2xl">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      ৮K এডিটোরিয়াল ব্যানার সফলভাবে তৈরি হয়েছে!
+                    </span>
+                    <a
+                      href={generatedImageUrl}
+                      download={`brand-banner-${Date.now()}.jpg`}
+                      className="py-1 px-3 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 shadow-sm"
+                    >
+                      📥 ডাউনলোড ইমেজ
+                    </a>
+                  </div>
+                  <div className="w-full max-h-72 rounded-xl overflow-hidden bg-black flex items-center justify-center border border-white/10">
+                    <img
+                      src={generatedImageUrl}
+                      alt="Generated Visual Banner"
+                      className="max-h-72 w-auto object-contain rounded-lg"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {generateError && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-center justify-between">
+                  <span>⚠️ {generateError}</span>
+                  <button
+                    onClick={handleCopyAndOpenGemini}
+                    className="text-amber-400 font-bold underline ml-2"
+                  >
+                    Gemini-তে খুলুন →
+                  </button>
+                </div>
+              )}
 
               {/* Prompt Output Code Box */}
               <div className="relative">

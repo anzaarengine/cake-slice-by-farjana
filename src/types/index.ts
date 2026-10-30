@@ -45,6 +45,8 @@ export type BackgroundStyle = ImageStyleKey;
 export type TypographyStyle = TypoStyleKey;
 export type BasePedestal = BasePedestalKey;
 
+export type BrandNicheKey = 'bakery' | 'jewelry' | 'cosmetics' | 'fashion' | 'beverage' | 'general';
+
 export interface PromptConfig {
   headline: string;
   imageStyle: ImageStyleKey;
@@ -53,6 +55,8 @@ export interface PromptConfig {
   basePedestal?: BasePedestalKey;
   brandOption?: 'none' | 'subtle' | 'full';
   textSizeOption?: 'refined' | 'medium' | 'large';
+  brandId?: string;
+  brandName?: string;
   generatedPrompt: string;
   createdAt: string;
 }
