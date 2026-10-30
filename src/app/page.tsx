@@ -12,13 +12,17 @@ import {
   Clock, 
   LogOut, 
   ShieldCheck, 
-  Lock
+  Lock,
+  Menu,
+  SlidersHorizontal,
+  FolderOpen
 } from 'lucide-react';
 import { PromptWizardModal } from '@/components/PromptWizardModal';
 import { SettingsModal } from '@/components/SettingsModal';
 import { CreateBrandModal } from '@/components/CreateBrandModal';
 import { AdminConsoleModal } from '@/components/AdminConsoleModal';
 import { LoginScreen } from '@/components/LoginScreen';
+import { Sidebar } from '@/components/Sidebar';
 import { PromptConfig } from '@/types';
 import { BrandProfile, INITIAL_BRANDS } from '@/data/brands';
 import { AuthSession } from '@/types/auth';
@@ -33,6 +37,16 @@ export default function Home() {
     return null;
   });
   const [isAdminConsoleOpen, setIsAdminConsoleOpen] = useState<boolean>(false);
+
+  // Dynamic Sidebar State
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('brandos_sidebar_collapsed') === 'true';
+    }
+    return false;
+  });
+  const [isOpenMobileSidebar, setIsOpenMobileSidebar] = useState<boolean>(false);
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('all');
 
   // Settings State
   const [apiKey, setApiKey] = useState<string>('');
@@ -52,6 +66,32 @@ export default function Home() {
   // Prompt History
   const [promptHistory, setPromptHistory] = useState<PromptConfig[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  // Toggle Sidebar collapse & save
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('brandos_sidebar_collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  // Keyboard shortcut for toggling sidebar: "[" or "Ctrl+B" / "Cmd+B"
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === '[' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) ||
+          ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b')) {
+        e.preventDefault();
+        toggleSidebarCollapse();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -208,13 +248,27 @@ export default function Home() {
     setIsWizardOpen(true);
   };
 
-  // Filter history: If tenant, strictly only show prompts for their brand
+  // Filter history: If tenant, strictly only show prompts for their brand + apply category filter
   const visibleHistory = useMemo(() => {
+    let list = promptHistory;
     if (session?.role === 'tenant' && session.brandId) {
-      return promptHistory.filter(h => !h.brandId || h.brandId === session.brandId);
+      list = list.filter(h => !h.brandId || h.brandId === session.brandId);
     }
-    return promptHistory;
-  }, [promptHistory, session]);
+    if (activeCategoryFilter !== 'all') {
+      const keywords: Record<string, string[]> = {
+        love: ['ভালোবাসা', 'প্রিয়', 'যত্ন', 'হাসি', 'মন', 'মিষ্টি'],
+        birthday: ['জন্মদিন', 'বছর', 'শুভ', 'উৎসব'],
+        taste: ['স্বাদ', 'খাঁটি', 'তৃপ্তি', 'চকলেট', 'ক্রিম'],
+        apology: ['অভিমান', 'ভুল', 'রাগ', 'ক্ষমা'],
+        self: ['নিজের', 'ট্রিট', 'মুহূর্ত', 'একলা', 'আনন্দ']
+      };
+      const words = keywords[activeCategoryFilter] || [];
+      if (words.length > 0) {
+        list = list.filter(h => words.some(w => h.headline.includes(w)));
+      }
+    }
+    return list;
+  }, [promptHistory, session, activeCategoryFilter]);
 
   const isGeminiConnected = Boolean(apiKey && apiKey.trim().length > 10);
 
@@ -224,308 +278,246 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070609] text-zinc-100 flex flex-col font-sans selection:bg-[#DFBA75] selection:text-black antialiased">
+    <div className="min-h-screen bg-[#070609] text-zinc-100 flex font-sans selection:bg-[#DFBA75] selection:text-black antialiased overflow-x-hidden">
       
-      {/* 1. Minimal Header Bar */}
-      <header className="sticky top-0 z-40 w-full bg-[#09080D]/85 backdrop-blur-xl border-b border-[#1E1B24]">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          
-          {/* Brand Identity / Selector */}
-          {session.role === 'tenant' ? (
-            /* Tenant Locked Brand Badge (No dropdown, 100% isolated) */
-            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-[#141219] border border-[#2B2736]">
-              <span className="text-lg">{activeBrand.icon}</span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-serif font-bold text-xs sm:text-sm text-zinc-100 truncate max-w-[150px] sm:max-w-[220px]">
-                    {activeBrand.nameBn}
-                  </span>
-                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono">
-                    ভেরিফাইড স্পেস
-                  </span>
-                </div>
-                <span className="text-[10px] text-zinc-500 font-mono block truncate">
-                  {session.clientName}
-                </span>
-              </div>
-            </div>
-          ) : (
-            /* Super Admin Brand Selector Dropdown */
-            <div className="relative">
-              <button
-                onClick={() => setIsBrandDropdownOpen(!isBrandDropdownOpen)}
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-[#141219] hover:bg-[#1D1A25] border border-amber-500/40 transition-all text-left"
-              >
-                <span className="text-base">{activeBrand.icon}</span>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-serif font-bold text-xs sm:text-sm text-amber-200 truncate max-w-[150px] sm:max-w-[220px]">
-                      {activeBrand.nameBn}
-                    </span>
-                    <ChevronDown className={`w-3.5 h-3.5 text-amber-400 transition-transform ${isBrandDropdownOpen ? 'rotate-180' : ''}`} />
-                  </div>
-                  <span className="text-[10px] text-zinc-400 font-mono block truncate flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    মাস্টার অ্যাডমিন ভিউ
-                  </span>
-                </div>
-              </button>
+      {/* ================= SUPER DYNAMIC ADVANCED SIDEBAR ================= */}
+      <Sidebar
+        session={session}
+        brands={brands}
+        activeBrand={activeBrand}
+        activeBrandId={activeBrandId}
+        isCollapsed={isSidebarCollapsed}
+        isOpenMobile={isOpenMobileSidebar}
+        totalHistoryCount={promptHistory.length}
+        activeCategoryFilter={activeCategoryFilter}
+        isGeminiConnected={isGeminiConnected}
+        selectedModel={selectedModel}
+        onToggleCollapse={toggleSidebarCollapse}
+        onCloseMobile={() => setIsOpenMobileSidebar(false)}
+        onSelectBrand={handleSelectBrand}
+        onOpenCreateBrand={() => setIsCreateBrandOpen(true)}
+        onOpenWizard={openWizardAt}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenAdminConsole={() => setIsAdminConsoleOpen(true)}
+        onSelectCategoryFilter={(cat) => setActiveCategoryFilter(cat)}
+        onLogout={handleLogout}
+      />
 
-              {/* Admin Dropdown Menu */}
-              {isBrandDropdownOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setIsBrandDropdownOpen(false)}
-                  />
-                  <div className="absolute top-full left-0 mt-2 w-72 rounded-2xl bg-[#121017] border border-[#2B2735] shadow-2xl z-50 p-2 space-y-1 animate-fade-in">
-                    <div className="px-2.5 py-1.5 text-[10px] font-mono text-zinc-500 uppercase tracking-wider flex items-center justify-between">
-                      <span>ব্র্যান্ড ওয়ার্কস্পেস ({brands.length})</span>
-                      <span className="text-amber-400">অ্যাডমিন</span>
-                    </div>
-
-                    <div className="max-h-60 overflow-y-auto space-y-1 custom-scrollbar pr-0.5">
-                      {brands.map((b) => {
-                        const isCurrent = b.id === activeBrandId;
-                        return (
-                          <button
-                            key={b.id}
-                            onClick={() => handleSelectBrand(b)}
-                            className={`w-full p-2 rounded-xl text-left transition-all flex items-center justify-between text-xs ${
-                              isCurrent
-                                ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/40'
-                                : 'hover:bg-[#1B1824] text-zinc-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 truncate">
-                              <span className="text-base">{b.icon}</span>
-                              <div className="truncate">
-                                <div className="truncate">{b.nameBn}</div>
-                                <div className="text-[10px] text-zinc-500 truncate">{b.tagline}</div>
-                              </div>
-                            </div>
-                            {isCurrent && <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="pt-1.5 border-t border-[#23202C]">
-                      <button
-                        onClick={() => {
-                          setIsBrandDropdownOpen(false);
-                          setIsCreateBrandOpen(true);
-                        }}
-                        className="w-full py-2 px-2.5 rounded-xl text-xs font-semibold text-amber-300 hover:text-black hover:bg-amber-500 bg-[#191622] border border-amber-500/30 transition-all flex items-center justify-center gap-1.5"
-                      >
-                        <PlusCircle className="w-3.5 h-3.5" />
-                        <span>+ নতুন ব্র্যান্ড যোগ করুন</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Right Controls */}
-          <div className="flex items-center gap-2">
-            {/* Master Admin Console Button */}
-            {session.role === 'super_admin' && (
-              <button
-                onClick={() => setIsAdminConsoleOpen(true)}
-                className="py-1.5 px-3 bg-[#191522] hover:bg-[#241E32] border border-amber-500/40 text-amber-300 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 active:scale-95 shadow-sm"
-                title="ক্লায়েন্ট আইডি ও পাসওয়ার্ড পরিচালনা করুন"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">অ্যাডমিন কনসোল</span>
-              </button>
-            )}
-
-            {/* New Prompt Button */}
-            <button
-              onClick={() => openWizardAt(1)}
-              className="py-1.5 px-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-xl shadow-md shadow-amber-500/15 flex items-center gap-1.5 active:scale-95 transition-all"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>নতুন প্রম্পট</span>
-            </button>
-
-            {/* Settings */}
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-2 rounded-xl bg-[#141218] hover:bg-[#1C1A22] border border-[#272431] text-zinc-400 hover:text-zinc-200 transition-colors"
-              title="API সেটিংস"
-            >
-              <div className="relative">
-                <Settings className="w-4 h-4" />
-                <span className={`absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full ${isGeminiConnected ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-              </div>
-            </button>
-
-            {/* Logout Button */}
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-xl bg-[#141218] hover:bg-rose-500/15 border border-[#272431] hover:border-rose-500/30 text-zinc-400 hover:text-rose-300 transition-colors"
-              title="লগআউট করুন"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-
-        </div>
-      </header>
-
-      {/* 2. Main Minimal Area - ONLY History (or clean empty state) */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      {/* ================= MAIN CONTENT WRAPPER ================= */}
+      <div 
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${
+          isSidebarCollapsed ? 'md:pl-[72px]' : 'md:pl-72'
+        }`}
+      >
         
-        {visibleHistory.length === 0 ? (
-          /* EMPTY STATE (When no prompts created yet) */
-          <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-5 animate-fade-in">
-            <div className="w-16 h-16 rounded-3xl bg-[#141219] border border-[#2A2635] flex items-center justify-center shadow-xl text-3xl">
-              {activeBrand.icon}
-            </div>
-
-            <div className="space-y-1 max-w-sm">
-              <h2 className="text-lg font-serif font-bold text-white">
-                {activeBrand.nameBn}
-              </h2>
-              <p className="text-xs text-zinc-400">
-                {activeBrand.tagline}
-              </p>
-              <p className="text-[11px] font-mono text-zinc-500 pt-1">
-                লগইন করা অ্যাকাউন্ট: <span className="text-amber-300">{session.clientName}</span>
-              </p>
-            </div>
-
-            <button
-              onClick={() => openWizardAt(1)}
-              className="py-3 px-6 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-sm rounded-2xl shadow-xl shadow-amber-500/20 flex items-center gap-2 active:scale-95 transition-all"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>✨ নতুন প্রম্পট তৈরি করুন</span>
-            </button>
-          </div>
-        ) : (
-          /* PROMPT HISTORY VIEW (Only shown when prompts exist) */
-          <div className="space-y-5 animate-fade-in">
+        {/* Minimalist Top Bar */}
+        <header className="sticky top-0 z-20 w-full bg-[#09080D]/85 backdrop-blur-xl border-b border-[#1E1B24]">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
             
-            {/* History Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#1E1C26]">
-              <div>
-                <h1 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-amber-400" />
-                  সংরক্ষিত প্রম্পট হিস্ট্রি
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 font-mono">
-                    {visibleHistory.length}টি
-                  </span>
-                </h1>
-              </div>
+            {/* Left: Mobile Sidebar Trigger & Brand Title */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsOpenMobileSidebar(true)}
+                className="md:hidden p-2 rounded-xl bg-[#141219] hover:bg-[#1E1B26] border border-[#2B2736] text-zinc-300 transition-colors"
+                title="মেনু খুলুন"
+              >
+                <Menu className="w-4 h-4" />
+              </button>
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => openWizardAt(1)}
-                  className="py-1.5 px-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 active:scale-95 transition-all"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>+ নতুন প্রম্পট</span>
-                </button>
-
-                <button
-                  onClick={handleClearAllHistory}
-                  className="py-1.5 px-2.5 rounded-xl text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 text-xs transition-colors"
-                  title="সব হিস্ট্রি ক্লিয়ার করুন"
-                >
-                  ক্লিয়ার
-                </button>
+                <span className="text-xl hidden sm:inline">{activeBrand.icon}</span>
+                <div>
+                  <h2 className="text-xs sm:text-sm font-bold text-white tracking-tight flex items-center gap-1.5 font-serif">
+                    {activeBrand.nameBn}
+                    <span className="text-[10px] font-sans font-normal px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                      BrandOS
+                    </span>
+                  </h2>
+                  <span className="text-[10px] text-zinc-500 font-mono hidden sm:block">
+                    {activeBrand.tagline}
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* History Items List */}
-            <div className="space-y-4">
-              {visibleHistory.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-2xl bg-[#0D0C11] border border-[#211E29] hover:border-[#332F3F] transition-all overflow-hidden shadow-lg space-y-0"
+            {/* Right: Quick Action & Shortcuts */}
+            <div className="flex items-center gap-2">
+              {activeCategoryFilter !== 'all' && (
+                <button
+                  onClick={() => setActiveCategoryFilter('all')}
+                  className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 transition-colors flex items-center gap-1"
                 >
-                  {/* Item Top Bar */}
-                  <div className="px-4 py-2.5 bg-[#121017] border-b border-[#1F1C26] flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-amber-300 text-sm">
-                        “{item.headline}”
-                      </span>
-                      {item.brandName && (
-                        <span className="text-[10px] text-zinc-400 font-mono bg-zinc-800/80 px-2 py-0.5 rounded-md">
-                          {item.brandName}
+                  <span>ফিল্টার ক্লিয়ার</span>
+                  <span className="text-xs">✕</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => openWizardAt(1)}
+                className="py-1.5 px-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-xl shadow-md shadow-amber-500/15 flex items-center gap-1.5 active:scale-95 transition-all"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>নতুন প্রম্পট</span>
+              </button>
+            </div>
+
+          </div>
+        </header>
+
+        {/* Main Content Area */}
+        <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12">
+          
+          {visibleHistory.length === 0 ? (
+            /* EMPTY STATE (When no prompts created yet) */
+            <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-5 animate-fade-in">
+              <div className="w-16 h-16 rounded-3xl bg-[#141219] border border-[#2A2635] flex items-center justify-center shadow-xl text-3xl">
+                {activeBrand.icon}
+              </div>
+
+              <div className="space-y-1 max-w-sm">
+                <h2 className="text-lg font-serif font-bold text-white">
+                  {activeBrand.nameBn}
+                </h2>
+                <p className="text-xs text-zinc-400">
+                  {activeCategoryFilter !== 'all' 
+                    ? `"${activeCategoryFilter}" ক্যাটাগরিতে কোনো সংরক্ষিত প্রম্পট নেই` 
+                    : activeBrand.tagline}
+                </p>
+                <p className="text-[11px] font-mono text-zinc-500 pt-1">
+                  লগইন করা অ্যাকাউন্ট: <span className="text-amber-300">{session.clientName}</span>
+                </p>
+              </div>
+
+              <button
+                onClick={() => openWizardAt(1)}
+                className="py-3 px-6 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-sm rounded-2xl shadow-xl shadow-amber-500/20 flex items-center gap-2 active:scale-95 transition-all"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>✨ নতুন প্রম্পট তৈরি করুন</span>
+              </button>
+            </div>
+          ) : (
+            /* PROMPT HISTORY VIEW (Only shown when prompts exist) */
+            <div className="space-y-5 animate-fade-in">
+              
+              {/* History Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-[#1E1C26]">
+                <div>
+                  <h1 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-400" />
+                    সংরক্ষিত প্রম্পট হিস্ট্রি
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 font-mono">
+                      {visibleHistory.length}টি
+                    </span>
+                  </h1>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openWizardAt(1)}
+                    className="py-1.5 px-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 active:scale-95 transition-all"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>+ নতুন প্রম্পট</span>
+                  </button>
+
+                  <button
+                    onClick={handleClearAllHistory}
+                    className="py-1.5 px-2.5 rounded-xl text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 text-xs transition-colors"
+                    title="সব হিস্ট্রি ক্লিয়ার করুন"
+                  >
+                    ক্লিয়ার
+                  </button>
+                </div>
+              </div>
+
+              {/* History Items List */}
+              <div className="space-y-4">
+                {visibleHistory.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-2xl bg-[#0D0C11] border border-[#211E29] hover:border-[#332F3F] transition-all overflow-hidden shadow-lg space-y-0"
+                  >
+                    {/* Item Top Bar */}
+                    <div className="px-4 py-2.5 bg-[#121017] border-b border-[#1F1C26] flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-amber-300 text-sm">
+                          “{item.headline}”
                         </span>
+                        {item.brandName && (
+                          <span className="text-[10px] text-zinc-400 font-mono bg-zinc-800/80 px-2 py-0.5 rounded-md">
+                            {item.brandName}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => copyPromptText(item.generatedPrompt, idx)}
+                          className="py-1 px-3 bg-[#1C1924] hover:bg-[#252230] text-zinc-200 border border-[#2D293A] hover:border-amber-500/40 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all active:scale-95"
+                        >
+                          {copiedIndex === idx ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="text-emerald-400">কপি হয়েছে</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-amber-400" />
+                              <span>কপি</span>
+                            </>
+                          )}
+                        </button>
+
+                        <a
+                          href="https://gemini.google.com/app"
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() => navigator.clipboard.writeText(item.generatedPrompt)}
+                          className="py-1 px-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all active:scale-95"
+                        >
+                          <span>Gemini ↗</span>
+                        </a>
+
+                        <button
+                          onClick={() => handleDeletePrompt(idx)}
+                          className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors ml-1"
+                          title="মুছে ফেলুন"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Metadata Tags */}
+                    <div className="px-4 py-1.5 bg-[#0A090D] border-b border-[#191720] flex flex-wrap items-center gap-2 text-[11px] text-zinc-400 font-mono">
+                      <span>রেশিও: <strong className="text-zinc-300">{item.ratio}</strong></span>
+                      <span>•</span>
+                      <span>স্টাইল: <strong className="text-zinc-300">{item.imageStyle}</strong></span>
+                      <span>•</span>
+                      <span>টাইপো: <strong className="text-zinc-300">{item.typoStyle}</strong></span>
+                      {item.createdAt && (
+                        <>
+                          <span>•</span>
+                          <span className="text-zinc-500">{item.createdAt}</span>
+                        </>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => copyPromptText(item.generatedPrompt, idx)}
-                        className="py-1 px-3 bg-[#1C1924] hover:bg-[#252230] text-zinc-200 border border-[#2D293A] hover:border-amber-500/40 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all active:scale-95"
-                      >
-                        {copiedIndex === idx ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            <span className="text-emerald-400">কপি হয়েছে</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5 text-amber-400" />
-                            <span>কপি</span>
-                          </>
-                        )}
-                      </button>
-
-                      <a
-                        href="https://gemini.google.com/app"
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={() => navigator.clipboard.writeText(item.generatedPrompt)}
-                        className="py-1 px-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all active:scale-95"
-                      >
-                        <span>Gemini ↗</span>
-                      </a>
-
-                      <button
-                        onClick={() => handleDeletePrompt(idx)}
-                        className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors ml-1"
-                        title="মুছে ফেলুন"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    {/* Prompt Text Box */}
+                    <div className="p-3.5 bg-[#07060A] font-mono text-[11px] text-zinc-300 leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap select-all custom-scrollbar">
+                      {item.generatedPrompt}
                     </div>
                   </div>
+                ))}
+              </div>
 
-                  {/* Metadata Tags */}
-                  <div className="px-4 py-1.5 bg-[#0A090D] border-b border-[#191720] flex flex-wrap items-center gap-2 text-[11px] text-zinc-400 font-mono">
-                    <span>রেশিও: <strong className="text-zinc-300">{item.ratio}</strong></span>
-                    <span>•</span>
-                    <span>স্টাইল: <strong className="text-zinc-300">{item.imageStyle}</strong></span>
-                    <span>•</span>
-                    <span>টাইপো: <strong className="text-zinc-300">{item.typoStyle}</strong></span>
-                    {item.createdAt && (
-                      <>
-                        <span>•</span>
-                        <span className="text-zinc-500">{item.createdAt}</span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Prompt Text Box */}
-                  <div className="p-3.5 bg-[#07060A] font-mono text-[11px] text-zinc-300 leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap select-all custom-scrollbar">
-                    {item.generatedPrompt}
-                  </div>
-                </div>
-              ))}
             </div>
+          )}
 
-          </div>
-        )}
+        </main>
 
-      </main>
+      </div>
 
       {/* 3. Wizard Modal */}
       <PromptWizardModal
