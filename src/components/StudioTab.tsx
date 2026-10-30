@@ -10,15 +10,13 @@ import {
   ExternalLink,
   Sliders,
   Shuffle,
-  Heart,
-  Cake,
-  Smile,
-  Coffee,
-  ShieldCheck,
-  Search
+  Eye,
+  Type,
+  Palette
 } from 'lucide-react';
 
-type PresetKey = 'preset-1' | 'preset-2' | 'preset-3';
+type ImageStyleKey = 'dark-cinematic' | 'organic-earth';
+type TypoStyleKey = 'brush' | 'fluid' | 'handwritten';
 
 // 60+ Heartfelt, Relatable Bengali Lines categorized by customer emotion
 const HEADLINE_VAULT = [
@@ -88,10 +86,13 @@ interface StudioTabProps {
 }
 
 export const StudioTab: React.FC<StudioTabProps> = () => {
-  // 1. Core States
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState<PresetKey>('preset-2');
+  // 1. Three Core Selections: Image Style + Typo Style + Bangla Line
+  const [imageStyle, setImageStyle] = useState<ImageStyleKey>('organic-earth');
+  const [typoStyle, setTypoStyle] = useState<TypoStyleKey>('fluid');
   const [customHeadline, setCustomHeadline] = useState<string>('প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি');
+
+  // 2. Upload & Canvas State
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [cakeScale, setCakeScale] = useState(75);
@@ -99,36 +100,6 @@ export const StudioTab: React.FC<StudioTabProps> = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Preset settings
-  const presets = {
-    'preset-1': {
-      id: 'preset-1',
-      title: '[Preset 1] Dark & Warm Cinematic',
-      subtitle: 'Artistic Brush Typography',
-      bgType: 'dark',
-      baseName: 'hand-carved dark wood block or rough dark stone base',
-      desc: 'কালো চারকোল ব্যাকগ্রাউন্ড, ড্রামাটিক সোনালি আলো ও অফ-হোয়াইট/গোল্ডেন ব্রাশ টাইপোগ্রাফি।'
-    },
-    'preset-2': {
-      id: 'preset-2',
-      title: '[Preset 2] Organic Earth Tone',
-      subtitle: 'Fluid / Liquid Typography',
-      bgType: 'earth',
-      baseName: 'raw travertine stone slab or light-oak timber block',
-      desc: '২নং ছবির মতো—ন্যাচারাল ট্রাভার্টিন মার্বেল স্ল্যাব, ওয়ার্ম বেইজ দেয়াল ও চকলেট-গোল্ড ফ্লুইড ক্যালিগ্রাফি।'
-    },
-    'preset-3': {
-      id: 'preset-3',
-      title: '[Preset 3] Organic Earth Tone + Handwritten',
-      subtitle: 'Handwritten Typography',
-      bgType: 'earth',
-      baseName: 'artisanal ceramic plate or natural light wood pedestal',
-      desc: 'ওয়ার্ম বেইজ প্লাস্টার ব্যাকগ্রাউন্ড ও হস্তলিখিত ক্যালিগ্রাফি সিগনেচার।'
-    }
-  };
-
-  const currentPreset = presets[selectedPreset];
 
   // Random Shuffle Headline
   const handleRandomShuffle = () => {
@@ -158,45 +129,69 @@ export const StudioTab: React.FC<StudioTabProps> = () => {
     }
   };
 
-  // Build the Exact Master Prompt dynamically with the selected emotional line
-  const getGeminiPrompt = () => {
-    const headline = customHeadline || 'প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি';
+  // BUILD THE EXACT 100% PROMPT COMBINING ALL THREE ELEMENTS
+  const generateDynamicMasterPrompt = () => {
+    const headline = customHeadline.trim() || 'প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি';
 
-    if (selectedPreset === 'preset-1') {
-      return `An editorial, ultra-premium advertising photograph in a 4:5 aspect ratio, featuring the user's uploaded cake situated in the bottom 25% of the frame. The cake rests on a dynamically chosen complementary base—specifically a ${currentPreset.baseName}, retaining its authentic original textures, frosting, decorations, and colors in high-fidelity. The top 75% of the canvas is completely empty, seamless pitch-dark charcoal negative space. A warm, golden cinematic side-light hits the cake and its complementary base, creating a moody, high-end dramatic atmosphere with rich contrasts and deep shadows.
-In the upper empty space, the Bengali typography is prominently featured in an off-white and light gold dual-tone with 3D embossed depth and brushwork:
-Main Headline (in Bengali): "${headline}"
-Brand Signature directly below: "কেক স্লাইস বাই ফারজানা"
-Small understated English subtitle at bottom: "~ ARTISANAL LUXURY BAKERY ~"
-Zero clutter, zero random props, holding a clean luxury magazine cover layout. 8k, photorealistic. --ar 4:5`;
+    // 1. Image Style & Lighting Configuration
+    let baseMaterial = '';
+    let backgroundDesc = '';
+    let lightingDesc = '';
+
+    if (imageStyle === 'dark-cinematic') {
+      baseMaterial = 'a hand-carved dark wood block or rough dark stone base';
+      backgroundDesc = 'completely empty, seamless pitch-dark charcoal negative space';
+      lightingDesc = 'A warm, golden cinematic side-light hits the cake and its complementary base, creating a moody, high-end dramatic atmosphere with rich contrasts and deep shadows.';
+    } else {
+      // organic-earth (Image 2 style)
+      baseMaterial = 'an authentic raw travertine stone slab (natural porous earth stone)';
+      backgroundDesc = 'an empty, seamless warm taupe, sand, or light-beige plaster wall, leaving massive breathing space';
+      lightingDesc = 'Soft, natural diffused ambient lighting gently illuminates the cake and its unique base, casting realistic delicate shadows with grounded earthy calmness.';
     }
 
-    if (selectedPreset === 'preset-2') {
-      return `A natural luxury editorial advertising photograph in a 4:5 aspect ratio, featuring the user's uploaded cake located strictly in the bottom 25% of the frame. The base on which the cake rests is an authentic raw travertine stone slab, ensuring it looks grounded, architectural, and matches the authentic cake's textures, frosting, and design in high-fidelity. The top 75% of the canvas is an empty, seamless warm taupe, sand, or light beige plaster wall, leaving massive breathing space. Soft, natural ambient lighting gently illuminates the cake and its base, casting realistic delicate shadows.
-Within the spacious upper background, elegant 3D embossed Bengali typography is prominently placed in rich dark-brown and warm bronze tones with natural flow and soft shadow depth:
-Main Headline (in Bengali): "${headline}"
-Brand Signature directly below: "কেক স্লাইস বাই ফারজানা"
-Small understated English subtitle at bottom: "~ PREMIUM CAKES ~"
-Completely free of clutter, zero random props, holding a premium editorial magazine layout. 8k, photorealistic. --ar 4:5`;
+    // 2. Typography Treatment Configuration
+    let typoColor = '';
+    let typoTreatment = '';
+    let subtitleText = '';
+
+    if (typoStyle === 'brush') {
+      typoColor = 'an off-white and light-gold dual-tone with 3D embossed depth';
+      typoTreatment = 'strictly in the Brush Strokes / Artistic Brush Style, showcasing rough, hand-painted artistic brushwork with visible bristle textures, expressive sweep effects, and subtle 3D shading on the strokes.';
+      subtitleText = '~ ARTISANAL LUXURY BAKERY ~';
+    } else if (typoStyle === 'fluid') {
+      typoColor = 'rich dark-brown and warm bronze/gold liquid tones with natural flow and soft shadow depth';
+      typoTreatment = 'strictly in the Fluid / Liquid style, characterized by smooth, organic, boldly curved shapes with natural flow, dynamic loops, and interconnected letters as if written with thick flowing liquid.';
+      subtitleText = '~ PREMIUM CAKES ~';
+    } else {
+      // handwritten
+      typoColor = 'dark-brown and subtle gold gradients';
+      typoTreatment = 'in an intimate handcrafted calligraphic handwriting style with natural curls, elegant flourishes, whimsical swooshes, and handcrafted dots around the letters.';
+      subtitleText = '~ ARTISANAL CONFECTIONERY ~';
     }
 
-    return `A natural luxury editorial advertising photograph in a 4:5 aspect ratio, featuring the user's uploaded cake located in the bottom 25% of the frame on an authentic ${currentPreset.baseName}, preserving its genuine textures, frosting, and design in high-fidelity. The top 75% of the canvas is an empty, seamless warm taupe and light beige plaster wall, offering huge breathing space. Soft, diffused ambient lighting gently illuminates the scene.
-In the upper empty canvas, the Bengali typography is proudly displayed in dark-brown and subtle gold gradients in a handcrafted calligraphic style:
-Main Headline (in Bengali): "${headline}"
-Brand Signature directly below: "কেক স্লাইস বাই ফারজানা"
-Small understated English subtitle at bottom: "~ ARTISANAL CONFECTIONERY ~"
-Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a sophisticated artisanal magazine feel. 8k, photorealistic. --ar 4:5`;
+    // Full Assembled Master Prompt
+    return `An editorial, ultra-premium advertising photograph in a 4:5 aspect ratio, featuring the user's uploaded cake situated strictly in the bottom 25% of the frame. The cake rests on ${baseMaterial}, retaining its authentic original textures, frosting, decorations, and colors in high-fidelity.
+
+The top 75% of the canvas is ${backgroundDesc}. ${lightingDesc}
+
+In the upper spacious background, elegant 3D embossed Bengali typography is prominently featured in ${typoColor}:
+- Main Emotional Headline: "${headline}"
+- Brand Name directly below: "কেক স্লাইস" (Line 1) and "বাই ফারজানা" (Line 2)
+- Typographical Artistic Treatment: ${typoTreatment}
+- Small understated English subtitle at bottom: "${subtitleText}"
+
+The image is clean, highly aesthetic, completely devoid of clutter or random props, strictly holding a luxury magazine cover layout. 8k, photorealistic. --ar 4:5`;
   };
 
   const handleCopyAndOpenGemini = () => {
-    const text = getGeminiPrompt();
-    navigator.clipboard.writeText(text);
+    const prompt = generateDynamicMasterPrompt();
+    navigator.clipboard.writeText(prompt);
     setCopiedPrompt(true);
     window.open('https://gemini.google.com/app', '_blank');
     setTimeout(() => setCopiedPrompt(false), 3000);
   };
 
-  // Draw 4:5 Live Canvas matching Image 2
+  // Render Live Canvas Preview synchronized with selections
   const renderCanvasPreview = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -208,7 +203,7 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
     canvas.width = width;
     canvas.height = height;
 
-    const isDark = currentPreset.bgType === 'dark';
+    const isDark = imageStyle === 'dark-cinematic';
 
     // 1. Background
     if (isDark) {
@@ -225,6 +220,7 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
       ctx.fillStyle = light;
       ctx.fillRect(0, 0, width, height);
     } else {
+      // Warm taupe plaster (Image 2 style)
       const grad = ctx.createLinearGradient(0, 0, 0, height);
       grad.addColorStop(0, '#EAE1D0');
       grad.addColorStop(0.3, '#E4D9C7');
@@ -240,7 +236,7 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
       ctx.fillRect(0, 0, width, height);
     }
 
-    // 2. Pedestal Slab (Exact Image 2 style)
+    // 2. Pedestal Slab (Wood or Travertine)
     const slabX = width * 0.22;
     const slabY = height * 0.75;
     const slabW = width * 0.56;
@@ -273,7 +269,7 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
       ctx.fillRect(slabX + 120, slabY + 25, 60, 8);
     }
 
-    // 3. Draw Cake
+    // 3. Cake
     if (uploadedImage) {
       const img = new Image();
       img.src = uploadedImage;
@@ -309,8 +305,10 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
     ctx.textAlign = 'center';
     const textY = height * 0.24;
 
-    // Line 1: Emotional / Catchy Headline
-    ctx.font = 'bold 44px "Playfair Display", "Anek Bangla", serif';
+    // Line 1: Emotional Headline
+    ctx.font = typoStyle === 'handwritten' 
+      ? 'italic bold 42px "Playfair Display", "Anek Bangla", cursive'
+      : 'bold 44px "Playfair Display", "Anek Bangla", serif';
     ctx.fillStyle = isDark ? '#FFF4D6' : '#3E2419';
     ctx.shadowColor = isDark ? 'rgba(0,0,0,0.8)' : 'rgba(62, 36, 25, 0.2)';
     ctx.shadowBlur = 12;
@@ -318,14 +316,25 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
     ctx.fillText(`“${customHeadline}”`, width / 2, textY);
 
     // Line 2: Brand Name "কেক স্লাইস"
-    ctx.font = 'bold 76px "Playfair Display", "Anek Bangla", serif';
-    ctx.fillStyle = isDark ? '#DFBA75' : '#4E2F1F';
+    if (typoStyle === 'brush') {
+      ctx.font = 'bold 78px "Playfair Display", "Anek Bangla", serif';
+      ctx.fillStyle = isDark ? '#DFBA75' : '#5A3D28';
+    } else if (typoStyle === 'fluid') {
+      ctx.font = 'bold 76px "Playfair Display", "Anek Bangla", serif';
+      ctx.fillStyle = isDark ? '#F5E4C3' : '#4E2F1F';
+    } else {
+      ctx.font = 'italic bold 74px "Anek Bangla", cursive, serif';
+      ctx.fillStyle = isDark ? '#F5E4C3' : '#3C2A1E';
+    }
+
     ctx.shadowBlur = 14;
     ctx.shadowOffsetY = 4;
     ctx.fillText('কেক স্লাইস', width / 2, textY + 85);
 
     // Line 3: "বাই ফারজানা"
-    ctx.font = '600 42px "Anek Bangla", sans-serif';
+    ctx.font = typoStyle === 'handwritten'
+      ? 'italic 600 42px "Anek Bangla", cursive'
+      : '600 42px "Anek Bangla", sans-serif';
     ctx.fillStyle = isDark ? '#EEDBB2' : '#6A452F';
     ctx.fillText('বাই ফারজানা', width / 2, textY + 145);
 
@@ -333,36 +342,41 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
     ctx.font = '500 15px sans-serif';
     ctx.fillStyle = isDark ? 'rgba(223, 186, 117, 0.85)' : 'rgba(94, 60, 39, 0.75)';
     ctx.shadowBlur = 0;
-    ctx.fillText('~  A R T I S A N A L   L U X U R Y   B A K E R Y  ~', width / 2, textY + 195);
+    const subText = typoStyle === 'brush' 
+      ? '~ ARTISANAL LUXURY BAKERY ~' 
+      : typoStyle === 'fluid' 
+      ? '~ PREMIUM CAKES ~' 
+      : '~ ARTISANAL CONFECTIONERY ~';
+    ctx.fillText(subText, width / 2, textY + 195);
 
     ctx.restore();
   };
 
   useEffect(() => {
     renderCanvasPreview();
-  }, [uploadedImage, selectedPreset, customHeadline, cakeScale, cakeOffsetY]);
+  }, [uploadedImage, imageStyle, typoStyle, customHeadline, cakeScale, cakeOffsetY]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const link = document.createElement('a');
     link.href = canvas.toDataURL('image/jpeg', 0.95);
-    link.download = `Cake-Slice-by-Farjana-${Date.now()}.jpg`;
+    link.download = `Cake-Slice-by-Farjana-${imageStyle}-${typoStyle}.jpg`;
     link.click();
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
       
-      {/* LEFT: Generator Controls & Headline Vault (6 cols) */}
-      <div className="lg:col-span-6 space-y-5">
+      {/* LEFT: 4-Step Master Selection Matrix (6 cols) */}
+      <div className="lg:col-span-6 space-y-4">
 
         {/* STEP 1: Upload Photo */}
         <div className="bg-[#141316] border border-[#26242B] rounded-2xl p-4 shadow-xl">
-          <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-[#DFBA75] flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-[#DFBA75] text-black flex items-center justify-center text-[10px] font-bold">1</span>
-              কেকের ছবি আপলোড করুন
+              কেকের ছবি দিন
             </span>
             {uploadedImage && (
               <span className="text-[10px] text-emerald-400 flex items-center gap-1">
@@ -381,7 +395,7 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
 
           <div
             onClick={() => fileInputRef.current?.click()}
-            className={`cursor-pointer w-full p-3.5 border-2 border-dashed rounded-xl transition-all text-center flex flex-col items-center justify-center ${
+            className={`cursor-pointer w-full p-3 border-2 border-dashed rounded-xl transition-all text-center flex items-center justify-center gap-3 ${
               uploadedImage
                 ? 'border-[#DFBA75]/60 bg-[#1A1722]'
                 : 'border-[#332F3D] hover:border-[#DFBA75]/80 bg-[#100F13] hover:bg-[#16141A]'
@@ -393,64 +407,104 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
                 <img
                   src={uploadedImage}
                   alt="Uploaded Cake"
-                  className="w-14 h-14 object-cover rounded-lg border border-[#DFBA75]/40 shadow-md"
+                  className="w-12 h-12 object-cover rounded-lg border border-[#DFBA75]/40"
                 />
                 <div className="text-left flex-1">
                   <div className="text-xs font-semibold text-zinc-100">কেকের ছবি পাওয়া গেছে</div>
-                  <div className="text-[10px] text-zinc-400 mt-0.5">ছবি পরিবর্তন করতে ক্লিক করুন</div>
+                  <div className="text-[10px] text-zinc-400">ছবি পরিবর্তন করতে এখানে ক্লিক করুন</div>
                 </div>
               </div>
             ) : (
-              <>
-                <Upload className="w-7 h-7 text-[#DFBA75] mb-1.5" />
-                <span className="text-xs font-semibold text-zinc-200">
-                  কেকের কাঁচা ছবি ড্রপ করুন বা ক্লিক করুন
-                </span>
-              </>
+              <div className="flex items-center gap-2 text-zinc-300 text-xs py-1">
+                <Upload className="w-5 h-5 text-[#DFBA75]" />
+                <span>কেকের কাঁচা ছবি আপলোড করুন</span>
+              </div>
             )}
           </div>
         </div>
 
-        {/* STEP 2: Pick Preset Style */}
+        {/* STEP 2: Image & Background Style */}
         <div className="bg-[#141316] border border-[#26242B] rounded-2xl p-4 shadow-xl space-y-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-[#DFBA75] flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-[#DFBA75] text-black flex items-center justify-center text-[10px] font-bold">2</span>
-            লক করা ব্যাকগ্রাউন্ড স্টাইল
+            ইমেজ ও ব্যাকগ্রাউন্ড স্টাইল
           </span>
 
           <div className="grid grid-cols-2 gap-2">
+            {/* Style 2: Organic Earth */}
             <button
-              onClick={() => setSelectedPreset('preset-2')}
-              className={`p-3 rounded-xl border text-left transition-all ${
-                selectedPreset === 'preset-2'
+              onClick={() => setImageStyle('organic-earth')}
+              className={`p-3 rounded-xl border text-left transition-all relative ${
+                imageStyle === 'organic-earth'
                   ? 'border-[#DFBA75] bg-[#1E1A26] shadow-[0_0_15px_rgba(223,186,117,0.15)]'
-                  : 'border-[#26242B] bg-[#0E0D10] text-zinc-400'
+                  : 'border-[#26242B] bg-[#0E0D10] text-zinc-400 hover:border-zinc-700'
               }`}
             >
-              <div className="text-xs font-bold text-zinc-100">[Preset 2] Organic Earth</div>
-              <div className="text-[10px] text-zinc-400 mt-0.5">২নং ছবির মতো ট্রাভার্টিন মার্বেল স্ল্যাব ও বেইজ দেয়াল</div>
+              <div className="w-full h-4 rounded bg-gradient-to-r from-[#D7CBBA] to-[#C9B9A3] mb-1.5 border border-[#B8A893]" />
+              <div className="text-xs font-bold text-zinc-100">Organic Earth Tone</div>
+              <div className="text-[10px] text-zinc-400 mt-0.5">ট্রাভার্টিন মার্বেল স্ল্যাব ও ওয়ার্ম বেইজ দেয়াল (২নং ছবি)</div>
+              {imageStyle === 'organic-earth' && (
+                <div className="absolute right-2 top-2 w-2 h-2 rounded-full bg-[#DFBA75]" />
+              )}
             </button>
 
+            {/* Style 1: Dark Cinematic */}
             <button
-              onClick={() => setSelectedPreset('preset-1')}
-              className={`p-3 rounded-xl border text-left transition-all ${
-                selectedPreset === 'preset-1'
+              onClick={() => setImageStyle('dark-cinematic')}
+              className={`p-3 rounded-xl border text-left transition-all relative ${
+                imageStyle === 'dark-cinematic'
                   ? 'border-[#DFBA75] bg-[#1E1A26] shadow-[0_0_15px_rgba(223,186,117,0.15)]'
-                  : 'border-[#26242B] bg-[#0E0D10] text-zinc-400'
+                  : 'border-[#26242B] bg-[#0E0D10] text-zinc-400 hover:border-zinc-700'
               }`}
             >
-              <div className="text-xs font-bold text-zinc-100">[Preset 1] Dark Cinematic</div>
-              <div className="text-[10px] text-zinc-400 mt-0.5">কালো ব্যাকগ্রাউন্ড ও ড্রামাটিক সোনালি আলো</div>
+              <div className="w-full h-4 rounded bg-gradient-to-r from-black via-[#1C1822] to-[#2E2415] mb-1.5 border border-zinc-800" />
+              <div className="text-xs font-bold text-zinc-100">Dark & Warm Cinematic</div>
+              <div className="text-[10px] text-zinc-400 mt-0.5">কালো চারকোল ব্যাকগ্রাউন্ড ও ড্রামাটিক সোনালি আলো</div>
+              {imageStyle === 'dark-cinematic' && (
+                <div className="absolute right-2 top-2 w-2 h-2 rounded-full bg-[#DFBA75]" />
+              )}
             </button>
           </div>
         </div>
 
-        {/* STEP 3: Massive Bengali Headline Vault (হাজারো বাংলা লাইনের লাইব্রেরি) */}
-        <div className="bg-[#141316] border border-[#26242B] rounded-2xl p-4 shadow-xl space-y-3">
+        {/* STEP 3: Typography Style Selector */}
+        <div className="bg-[#141316] border border-[#26242B] rounded-2xl p-4 shadow-xl space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[#DFBA75] flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-[#DFBA75] text-black flex items-center justify-center text-[10px] font-bold">3</span>
+            বাংলা টাইপোগ্রাফির শৈল্পিক ধরন (Typo Style)
+          </span>
+
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { id: 'fluid', title: 'Fluid / Liquid', desc: 'তরল চকলেট ও সোনালি কার্ভ (২নং ছবির মতো)' },
+              { id: 'brush', title: 'Artistic Brush', desc: 'তুলির সোনালি-সাদা ৩ডি টান ও টেক্সচার' },
+              { id: 'handwritten', title: 'Handwritten', desc: 'হাতে আঁকা নান্দনিক ক্যালিগ্রাফি সিগনেচার' },
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTypoStyle(t.id as TypoStyleKey)}
+                className={`p-2.5 rounded-xl border text-left transition-all relative ${
+                  typoStyle === t.id
+                    ? 'border-[#DFBA75] bg-[#1E1A26] text-[#DFBA75]'
+                    : 'border-[#26242B] bg-[#0E0D10] text-zinc-400 hover:border-zinc-700'
+                }`}
+              >
+                <div className="text-[11px] font-bold text-zinc-100 truncate">{t.title}</div>
+                <div className="text-[9px] text-zinc-400 mt-0.5 leading-tight">{t.desc}</div>
+                {typoStyle === t.id && (
+                  <div className="absolute right-1.5 top-1.5 w-1.5 h-1.5 rounded-full bg-[#DFBA75]" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* STEP 4: Emotional Bengali Headline Selection */}
+        <div className="bg-[#141316] border border-[#26242B] rounded-2xl p-4 shadow-xl space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-[#DFBA75] flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[#DFBA75] text-black flex items-center justify-center text-[10px] font-bold">3</span>
-              আবেগঘন বাংলা হেডলাইন ভল্ট (Select any line)
+              <span className="w-5 h-5 rounded-full bg-[#DFBA75] text-black flex items-center justify-center text-[10px] font-bold">4</span>
+              আবেগঘন বাংলা হেডলাইন (Headline Vault)
             </span>
 
             <button
@@ -462,9 +516,9 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
             </button>
           </div>
 
-          {/* Active Selected Headline Input */}
-          <div className="p-2.5 rounded-xl bg-[#0E0D10] border border-[#DFBA75]/40 flex items-center gap-2">
-            <span className="text-sm">✍️</span>
+          {/* Active Editable Input */}
+          <div className="p-2 rounded-xl bg-[#0E0D10] border border-[#DFBA75]/40 flex items-center gap-2">
+            <span className="text-xs">✍️</span>
             <input
               type="text"
               value={customHeadline}
@@ -475,20 +529,20 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
           </div>
 
           {/* Category Tabs */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1 text-[10px] scrollbar-none">
+          <div className="flex gap-1 overflow-x-auto pb-1 text-[10px] scrollbar-none">
             {[
-              { id: 'all', label: 'সব লাইন' },
+              { id: 'all', label: 'সব' },
               { id: 'love', label: '❤️ প্রিয়জন' },
               { id: 'birthday', label: '🎂 জন্মদিন' },
               { id: 'apology', label: '🥺 মান-অভিমান' },
               { id: 'self', label: '☕ নিজের ট্রিট' },
               { id: 'taste', label: '✨ খাঁটি স্বাদ' },
-              { id: 'family', label: '👨‍👩‍👧 আড্ডা ও পরিবার' },
+              { id: 'family', label: '👨‍👩‍👧 আড্ডা' },
             ].map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition-all ${
+                className={`px-2 py-0.5 rounded-lg whitespace-nowrap transition-all ${
                   selectedCategory === cat.id
                     ? 'bg-[#DFBA75] text-black font-bold'
                     : 'bg-[#18161D] text-zinc-400 hover:text-zinc-200'
@@ -499,13 +553,13 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
             ))}
           </div>
 
-          {/* Scrollable Headline Selector Grid */}
-          <div className="max-h-48 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
+          {/* Headline Selector List */}
+          <div className="max-h-36 overflow-y-auto pr-1 space-y-1 scrollbar-thin">
             {filteredHeadlines.map((item, idx) => (
               <button
                 key={idx}
                 onClick={() => setCustomHeadline(item.text)}
-                className={`w-full text-left p-2 rounded-lg text-xs transition-all border ${
+                className={`w-full text-left p-1.5 rounded-lg text-[11px] transition-all border ${
                   customHeadline === item.text
                     ? 'bg-[#DFBA75]/15 border-[#DFBA75] text-[#DFBA75] font-semibold'
                     : 'bg-[#0E0D10] border-transparent text-zinc-300 hover:border-zinc-700 hover:bg-[#16141A]'
@@ -515,11 +569,10 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
               </button>
             ))}
           </div>
-
         </div>
 
-        {/* STEP 4: 1-Click Action to Gemini */}
-        <div className="space-y-2.5">
+        {/* STEP 5: Live Synthesized Prompt Action */}
+        <div className="space-y-2">
           <button
             onClick={handleCopyAndOpenGemini}
             className="w-full py-4 px-6 rounded-2xl font-bold text-sm bg-gradient-to-r from-[#DFBA75] via-[#F4D998] to-[#C99C47] text-black hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl flex items-center justify-center gap-2"
@@ -529,8 +582,8 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
             <ExternalLink className="w-4 h-4 ml-1" />
           </button>
 
-          <p className="text-[11px] text-zinc-400 text-center leading-relaxed">
-            💡 <strong>সরাসরি ম্যাজিক:</strong> এই বাটনে চাপলেই আপনার নির্বাচিত বাংলা হেডলাইনযুক্ত নিখুঁত ৮K প্রম্পটটি কপি হয়ে যাবে এবং <strong>Gemini chat</strong> খুলে যাবে। সেখানে শুধু আপনার কেকের ছবি দিয়ে <strong>Paste</strong> করে সেন্ড করলেই হুবহু ২নং ছবির মতো মাস্টারপিস আউটপুট পাবেন!
+          <p className="text-[10px] text-zinc-400 text-center leading-relaxed">
+            ⚡ <strong>সিস্টেম গ্যারান্টি:</strong> আপনার পছন্দ করা <strong>ইমেজ স্টাইল + টাইপো স্টাইল + বাংলা হেডলাইন</strong> একসাথে নিখুঁতভাবে মার্জ হয়ে মাস্টার প্রম্পট তৈরি হয়ে গেছে। বাটনে চাপ দিয়ে Gemini চ্যাটে পেস্ট করলেই ২নং ছবির মতো ছবি তৈরি হয়ে যাবে!
           </p>
         </div>
 
@@ -540,14 +593,19 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
       <div className="lg:col-span-6 flex flex-col items-center">
         <div className="w-full max-w-[440px] bg-[#0A0A0C] border border-[#2A2832] rounded-3xl p-4 shadow-2xl relative">
           
-          <div className="flex items-center justify-between mb-2.5 px-2">
+          <div className="flex items-center justify-between mb-2 px-2">
             <span className="text-xs font-semibold tracking-wider text-zinc-300 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              ৪:৫ পোস্টার লাইভ প্রিভিউ
+              লাইভ প্রিভিউ (৪:৫ রেশিও)
             </span>
-            <span className="text-[10px] uppercase tracking-widest text-[#DFBA75] bg-[#DFBA75]/10 px-2 py-0.5 rounded-full border border-[#DFBA75]/25">
-              4:5 Editorial
-            </span>
+            <div className="flex gap-1">
+              <span className="text-[9px] text-[#DFBA75] bg-[#DFBA75]/10 px-2 py-0.5 rounded-full border border-[#DFBA75]/20">
+                {imageStyle === 'organic-earth' ? 'Earth' : 'Cinematic'}
+              </span>
+              <span className="text-[9px] text-[#DFBA75] bg-[#DFBA75]/10 px-2 py-0.5 rounded-full border border-[#DFBA75]/20 capitalize">
+                {typoStyle}
+              </span>
+            </div>
           </div>
 
           {/* Canvas Rendering Frame */}
@@ -585,7 +643,7 @@ Exceptionally clean, aesthetic, devoid of any clutter or props, capturing a soph
 
           {/* Sliders for fine-tuning */}
           {uploadedImage && (
-            <div className="mt-3 p-3 bg-[#131217] border border-[#26242B] rounded-xl flex items-center justify-between text-[11px] text-zinc-400">
+            <div className="mt-3 p-2.5 bg-[#131217] border border-[#26242B] rounded-xl flex items-center justify-between text-[11px] text-zinc-400">
               <span>কেকের সাইজ: {cakeScale}%</span>
               <input
                 type="range"
