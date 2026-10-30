@@ -430,38 +430,62 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
             ইমেজ ও ব্যাকগ্রাউন্ড স্টাইল
           </span>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             {/* Style 2: Organic Earth */}
             <button
               onClick={() => setImageStyle('organic-earth')}
-              className={`p-3 rounded-xl border text-left transition-all relative ${
+              className={`p-2.5 rounded-2xl border text-left transition-all relative overflow-hidden group ${
                 imageStyle === 'organic-earth'
-                  ? 'border-[#DFBA75] bg-[#1E1A26] shadow-[0_0_15px_rgba(223,186,117,0.15)]'
-                  : 'border-[#26242B] bg-[#0E0D10] text-zinc-400 hover:border-zinc-700'
+                  ? 'border-[#DFBA75] bg-[#1E1A26] shadow-[0_0_20px_rgba(223,186,117,0.2)]'
+                  : 'border-[#26242B] bg-[#0E0D10] opacity-80 hover:opacity-100 hover:border-zinc-700'
               }`}
             >
-              <div className="w-full h-4 rounded bg-gradient-to-r from-[#D7CBBA] to-[#C9B9A3] mb-1.5 border border-[#B8A893]" />
+              {/* Visual Image Preview */}
+              <div className="w-full aspect-[4/5] rounded-xl overflow-hidden mb-2 relative border border-[#DFBA75]/20 shadow-md">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/preview-earth-tone.jpg"
+                  alt="Organic Earth Tone Preview"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <span className="absolute bottom-1.5 left-1.5 bg-black/75 backdrop-blur-sm text-[9px] text-[#DFBA75] font-semibold px-1.5 py-0.5 rounded-md border border-[#DFBA75]/30">
+                  ২নং ছবির আসল লুক
+                </span>
+              </div>
+
               <div className="text-xs font-bold text-zinc-100">Organic Earth Tone</div>
-              <div className="text-[10px] text-zinc-400 mt-0.5">ট্রাভার্টিন মার্বেল স্ল্যাব ও ওয়ার্ম বেইজ দেয়াল (২নং ছবি)</div>
+              <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">ট্রাভার্টিন মার্বেল স্ল্যাব ও ওয়ার্ম বেইজ প্লাস্টার দেয়াল</div>
               {imageStyle === 'organic-earth' && (
-                <div className="absolute right-2 top-2 w-2 h-2 rounded-full bg-[#DFBA75]" />
+                <div className="absolute right-3 top-3 w-2.5 h-2.5 rounded-full bg-[#DFBA75] shadow-[0_0_8px_#DFBA75]" />
               )}
             </button>
 
             {/* Style 1: Dark Cinematic */}
             <button
               onClick={() => setImageStyle('dark-cinematic')}
-              className={`p-3 rounded-xl border text-left transition-all relative ${
+              className={`p-2.5 rounded-2xl border text-left transition-all relative overflow-hidden group ${
                 imageStyle === 'dark-cinematic'
-                  ? 'border-[#DFBA75] bg-[#1E1A26] shadow-[0_0_15px_rgba(223,186,117,0.15)]'
-                  : 'border-[#26242B] bg-[#0E0D10] text-zinc-400 hover:border-zinc-700'
+                  ? 'border-[#DFBA75] bg-[#1E1A26] shadow-[0_0_20px_rgba(223,186,117,0.2)]'
+                  : 'border-[#26242B] bg-[#0E0D10] opacity-80 hover:opacity-100 hover:border-zinc-700'
               }`}
             >
-              <div className="w-full h-4 rounded bg-gradient-to-r from-black via-[#1C1822] to-[#2E2415] mb-1.5 border border-zinc-800" />
+              {/* Visual Image Preview */}
+              <div className="w-full aspect-[4/5] rounded-xl overflow-hidden mb-2 relative border border-[#DFBA75]/20 shadow-md">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/preview-dark-cinematic.jpg"
+                  alt="Dark Cinematic Preview"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <span className="absolute bottom-1.5 left-1.5 bg-black/75 backdrop-blur-sm text-[9px] text-[#DFBA75] font-semibold px-1.5 py-0.5 rounded-md border border-[#DFBA75]/30">
+                  ডার্ক ও গোল্ডেন লুক
+                </span>
+              </div>
+
               <div className="text-xs font-bold text-zinc-100">Dark & Warm Cinematic</div>
-              <div className="text-[10px] text-zinc-400 mt-0.5">কালো চারকোল ব্যাকগ্রাউন্ড ও ড্রামাটিক সোনালি আলো</div>
+              <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">কালো চারকোল ব্যাকগ্রাউন্ড ও ড্রামাটিক সোনালি আলো</div>
               {imageStyle === 'dark-cinematic' && (
-                <div className="absolute right-2 top-2 w-2 h-2 rounded-full bg-[#DFBA75]" />
+                <div className="absolute right-3 top-3 w-2.5 h-2.5 rounded-full bg-[#DFBA75] shadow-[0_0_8px_#DFBA75]" />
               )}
             </button>
           </div>
