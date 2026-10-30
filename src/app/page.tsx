@@ -29,13 +29,11 @@ import { AuthSession } from '@/types/auth';
 import { getCurrentSession, logoutSession } from '@/data/authAccounts';
 
 export default function Home() {
+  // Mounting & Hydration Guard (Prevents flicker/flash of wrong screen)
+  const [isMounted, setIsMounted] = useState<boolean>(false);
+
   // Authentication State
-  const [session, setSession] = useState<AuthSession | null>(() => {
-    if (typeof window !== 'undefined') {
-      return getCurrentSession();
-    }
-    return null;
-  });
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [isAdminConsoleOpen, setIsAdminConsoleOpen] = useState<boolean>(false);
 
   // Dynamic Sidebar State
@@ -153,6 +151,9 @@ export default function Home() {
     } catch {
       // ignore
     }
+
+    // 6. Finished loading state from localStorage
+    setIsMounted(true);
   }, []);
 
   const handleLoginSuccess = (newSession: AuthSession) => {
@@ -271,6 +272,17 @@ export default function Home() {
   }, [promptHistory, session, activeCategoryFilter]);
 
   const isGeminiConnected = Boolean(apiKey && apiKey.trim().length > 10);
+
+  // Hydration Guard: Do not render login or dashboard until client reads localStorage (prevents nanosecond screen flash)
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-[#070609] flex items-center justify-center">
+        <div className="w-10 h-10 rounded-2xl bg-[#141219] border border-[#262332] flex items-center justify-center shadow-2xl animate-pulse">
+          <Sparkles className="w-4 h-4 text-[#DFBA75]" />
+        </div>
+      </div>
+    );
+  }
 
   // GATEKEEPER: If not authenticated, show luxury Login Screen
   if (!session) {
