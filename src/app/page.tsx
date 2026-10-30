@@ -80,7 +80,12 @@ export default function Home() {
         </div>
 
         {/* Tab Views */}
-        {activeTab === 'studio' && <StudioTab />}
+        {activeTab === 'studio' && (
+          <StudioTab
+            apiKey={apiKey}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+          />
+        )}
         {activeTab === 'carousel' && <CarouselTab />}
         {activeTab === 'video' && <VideoTab apiKey={apiKey} />}
         {activeTab === 'copywriter' && <CopywriterTab apiKey={apiKey} />}

@@ -1,6 +1,9 @@
 /**
- * Gemini Pro Client Integration for Cake Slice by Farjana
- * Supports direct API Key connection with Google Gemini REST API.
+ * Gemini & Imagen 3 Integration for Cake Slice by Farjana
+ * Supports:
+ * 1. Multimodal Cake Analysis (Gemini 1.5 Pro / 2.5 Flash)
+ * 2. Imagen 3 Photorealistic Generation (imagen-3.0-generate-002)
+ * 3. AI Caption & Reels Video Director
  */
 
 export interface GeminiConfig {
@@ -9,7 +12,9 @@ export interface GeminiConfig {
 }
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+export const IMAGEN_MODEL = 'imagen-3.0-generate-002';
 
+// Test Gemini API key
 export async function testGeminiConnection(apiKey: string, model: string = DEFAULT_GEMINI_MODEL): Promise<{ success: boolean; message: string }> {
   if (!apiKey || apiKey.trim() === '') {
     return { success: false, message: 'API Key is missing' };
@@ -19,38 +24,137 @@ export async function testGeminiConnection(apiKey: string, model: string = DEFAU
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: 'Respond with the single word: READY' }
-            ]
-          }
-        ]
+        contents: [{ parts: [{ text: 'Respond with READY' }] }]
       })
     });
 
     const data = await response.json();
     if (!response.ok) {
-      const errMsg = data.error?.message || response.statusText;
-      return { success: false, message: `Error: ${errMsg}` };
+      return { success: false, message: data.error?.message || response.statusText };
     }
-
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (reply.includes('READY')) {
-      return { success: true, message: `Connected to ${model} successfully!` };
-    }
-
-    return { success: true, message: `Connected to ${model}` };
+    return { success: true, message: `Connected to Gemini Pro & Imagen 3 successfully!` };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    return { success: false, message: `Connection failed: ${errorMsg}` };
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: `Connection failed: ${msg}` };
   }
 }
 
+/**
+ * Step 1: Analyze user's uploaded cake photo with Gemini Vision
+ */
+export async function analyzeCakeVisuals(params: {
+  apiKey: string;
+  imageBase64: string;
+}): Promise<{
+  cakeDescription: string;
+  colors: string[];
+  features: string;
+  suggestedBase: string;
+}> {
+  const { apiKey, imageBase64 } = params;
+
+  // Strip data:image/...;base64, prefix if present
+  const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+
+  const prompt = `
+Analyze this uploaded cake for the luxury brand "Cake Slice by Farjana".
+Identify:
+1. Exact cake shape, tiers, and frosting style (e.g. textured buttercream, smooth fondant, drip, rosettes).
+2. Color palette (e.g. powder blue, ivory cream, dark chocolate, gold flakes).
+3. Decorations, toppings, or toppers (e.g. sprinkles, chocolate shards, floral, calligraphy).
+4. Recommend the most complementary luxury base/pedestal: hand-carved dark wood block, raw travertine stone slab, matte ceramic plate, light-oak timber, or terracotta platter.
+
+Output strictly valid JSON:
+{
+  "cakeDescription": "2-sentence high-fidelity physical description of this exact cake",
+  "colors": ["color1", "color2"],
+  "features": "specific frosting textures and toppers",
+  "suggestedBase": "raw travertine stone slab"
+}
+`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: 'image/jpeg',
+                data: base64Data
+              }
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: 'application/json'
+      }
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'Failed to analyze cake photo');
+  }
+
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  const cleaned = text.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+  return JSON.parse(cleaned);
+}
+
+/**
+ * Step 2: Generate the editorial image with Google Imagen 3 API
+ */
+export async function generateEditorialImageWithImagen(params: {
+  apiKey: string;
+  prompt: string;
+  aspectRatio?: '3:4' | '4:5' | '1:1' | '9:16';
+}): Promise<string> {
+  const { apiKey, prompt, aspectRatio = '3:4' } = params;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGEN_MODEL}:predict?key=${apiKey.trim()}`;
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      instances: [
+        {
+          prompt: prompt
+        }
+      ],
+      parameters: {
+        sampleCount: 1,
+        aspectRatio: aspectRatio,
+        outputMimeType: 'image/jpeg'
+      }
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || `Imagen 3 error (${response.status})`);
+  }
+
+  const base64Image = data.predictions?.[0]?.bytesBase64Encoded;
+  if (!base64Image) {
+    throw new Error('No image was returned from Imagen 3. Please verify your Gemini API key has access to Imagen 3.');
+  }
+
+  return `data:image/jpeg;base64,${base64Image}`;
+}
+
+/**
+ * Step 3: Copywriting
+ */
 export async function generateLuxuryCaption(params: {
   apiKey: string;
   model?: string;
@@ -61,31 +165,20 @@ export async function generateLuxuryCaption(params: {
 }): Promise<{ hook: string; body: string; callToAction: string; hashtags: string[]; fullText: string }> {
   const { apiKey, model = DEFAULT_GEMINI_MODEL, cakeName, flavorProfile, tone, language } = params;
 
-  if (!apiKey) {
-    throw new Error('Gemini API key is required');
-  }
-
   const prompt = `
-You are the Executive Art Director & Copywriter for "Cake Slice by Farjana" (কেক স্লাইস বাই ফারজানা) — an ultra-premium artisanal luxury bakery in Dhaka.
+You are the Executive Art Director & Copywriter for "Cake Slice by Farjana" (কেক স্লাইস বাই ফারজানা).
+Cake: "${cakeName || 'Artisanal Bespoke Cake'}"
+Flavors: "${flavorProfile || 'Rich velvety chocolate ganache, handcrafted edible gold accents'}"
+Tone: ${tone}
+Language: ${language}
 
-Cake Details:
-- Name/Description: "${cakeName || 'Artisanal Bespoke Cake'}"
-- Flavors/Craft: "${flavorProfile || 'Rich velvety chocolate ganache, handcrafted edible gold accents'}"
-- Target Tone: ${tone} (Options: editorial magazine, grand celebration, minimalist chic, artisan craft)
-- Language Preference: ${language} (Natural, poetic, high-status Bengali or English with luxury touch)
-
-Brand Essence:
-- Understated luxury, magazine editorial elegance, Michelin-level confectionery aesthetics.
-- Never cheesy, never pushy. Poetic, sensory, and captivating.
-
-Generate the output in strict JSON format with this exact structure:
+Strict JSON output:
 {
-  "hook": "A captivating, scroll-stopping 1-sentence opening hook",
-  "body": "2 to 3 poetic, sensory sentences describing the taste, textures, and artisanal creation of the cake",
-  "callToAction": "An elegant, subtle booking/order invitation (e.g. DM to reserve your bespoke slice / Slots limited)",
-  "hashtags": ["#CakeSliceByFarjana", "#ArtisanalBakeryDhaka", "#LuxuryCakesDhaka", "#BespokeCakes", "#CoutureCakes"]
+  "hook": "1-sentence hook",
+  "body": "2-3 sensory sentences",
+  "callToAction": "Order invitation",
+  "hashtags": ["#CakeSliceByFarjana", "#ArtisanalBakeryDhaka", "#LuxuryCakesDhaka"]
 }
-Only output the raw JSON object, no markdown codeblocks.
 `;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
@@ -107,28 +200,15 @@ Only output the raw JSON object, no markdown codeblocks.
   }
 
   const rawJson = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  try {
-    const cleaned = rawJson.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-    const parsed = JSON.parse(cleaned);
-    const fullText = `${parsed.hook}\n\n${parsed.body}\n\n${parsed.callToAction}\n\n${parsed.hashtags.join(' ')}`;
-    return {
-      hook: parsed.hook,
-      body: parsed.body,
-      callToAction: parsed.callToAction,
-      hashtags: parsed.hashtags,
-      fullText
-    };
-  } catch {
-    return {
-      hook: "শিল্প ও স্বাদের নিখুঁত মেলবন্ধন — কেক স্লাইস বাই ফারজানা।",
-      body: rawJson || "প্রতিটি স্লাইসে অতুলনীয় খাঁটি উপকরণ ও যত্নের স্পর্শ।",
-      callToAction: "আপনার বিশেষ দিনের জন্য আগে থেকেই অর্ডার কনফার্ম করুন। ইনবক্সে যোগাযোগ করুন।",
-      hashtags: ["#CakeSliceByFarjana", "#DhakaLuxuryBakery", "#BespokeCakes"],
-      fullText: rawJson
-    };
-  }
+  const cleaned = rawJson.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+  const parsed = JSON.parse(cleaned);
+  const fullText = `${parsed.hook}\n\n${parsed.body}\n\n${parsed.callToAction}\n\n${parsed.hashtags.join(' ')}`;
+  return { ...parsed, fullText };
 }
 
+/**
+ * Step 4: Video Reels analysis
+ */
 export async function analyzeVideoForReels(params: {
   apiKey: string;
   model?: string;
@@ -142,18 +222,14 @@ export async function analyzeVideoForReels(params: {
   const { apiKey, model = DEFAULT_GEMINI_MODEL, videoDescription } = params;
 
   const prompt = `
-You are the Creative Video Director for "Cake Slice by Farjana" (কেক স্লাইস বাই ফারজানা).
-The creator has recorded a raw video of their cake creation/display.
+Creative Video Director for "Cake Slice by Farjana" (কেক স্লাইস বাই ফারজানা).
 Video Context: "${videoDescription}"
-
-Advise them on how to turn this raw footage into a viral, high-end 9:16 Instagram Reel / Short with zero clutter and pure luxury aesthetic.
-
-Return pure JSON:
+Return JSON:
 {
-  "hookIdea": "What the very first 2 seconds should show to stop the scroll",
-  "bestTimestamps": ["0:00 - 0:02 : Close-up texture reveal", "0:02 - 0:08 : Slow-motion knife slice or ganache pour", "0:08 - 0:15 : Finished cake on artisanal base"],
-  "audioVibe": "e.g., Warm French Accordion / Lo-Fi Classical Cello / Soft ASMR Kitchen Sounds",
-  "editorialAdvice": "1 concise sentence on color grading, lighting or text overlay"
+  "hookIdea": "2-second scroll stopper",
+  "bestTimestamps": ["0:00 - 0:02 : Close-up reveal", "0:02 - 0:08 : Action", "0:08 - 0:15 : Finished cake"],
+  "audioVibe": "Audio recommendation",
+  "editorialAdvice": "Color & lighting advice"
 }
 `;
 
