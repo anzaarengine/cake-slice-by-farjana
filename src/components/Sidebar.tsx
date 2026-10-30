@@ -33,6 +33,7 @@ interface SidebarProps {
   isOpenMobile: boolean;
   totalHistoryCount: number;
   activeCategoryFilter: string;
+  activeView: 'dashboard' | 'brand-setup';
   isGeminiConnected: boolean;
   selectedModel: string;
   onToggleCollapse: () => void;
@@ -43,6 +44,7 @@ interface SidebarProps {
   onOpenSettings: () => void;
   onOpenAdminConsole: () => void;
   onSelectCategoryFilter: (category: string) => void;
+  onChangeView: (view: 'dashboard' | 'brand-setup') => void;
   onLogout: () => void;
 }
 
@@ -55,6 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpenMobile,
   totalHistoryCount,
   activeCategoryFilter,
+  activeView,
   isGeminiConnected,
   selectedModel,
   onToggleCollapse,
@@ -65,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettings,
   onOpenAdminConsole,
   onSelectCategoryFilter,
+  onChangeView,
   onLogout
 }) => {
   const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
@@ -225,6 +229,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <Sparkles className="w-4 h-4 shrink-0 transition-transform group-hover:rotate-12" />
               {!isCollapsed && <span className="truncate">নতুন প্রম্পট তৈরি</span>}
+            </button>
+          </div>
+
+          {/* Primary View Switcher */}
+          <div className="space-y-1">
+            <button
+              onClick={() => onChangeView('dashboard')}
+              className={`w-full p-2 rounded-xl text-left transition-all flex items-center gap-2.5 text-xs ${
+                activeView === 'dashboard'
+                  ? 'bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#15131C]'
+              } ${isCollapsed ? 'justify-center' : ''}`}
+              title="ড্যাশবোর্ড ও হিস্ট্রি"
+            >
+              <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+              {!isCollapsed && <span className="truncate flex-1">ড্যাশবোর্ড ও হিস্ট্রি</span>}
+            </button>
+
+            <button
+              onClick={() => onChangeView('brand-setup')}
+              className={`w-full p-2 rounded-xl text-left transition-all flex items-center gap-2.5 text-xs ${
+                activeView === 'brand-setup'
+                  ? 'bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#15131C]'
+              } ${isCollapsed ? 'justify-center' : ''}`}
+              title="ব্র্যান্ড ওএস ডিএনএ সেটআপ"
+            >
+              <Sliders className="w-4 h-4 text-amber-400 shrink-0" />
+              {!isCollapsed && (
+                <div className="flex-1 min-w-0 flex items-center justify-between">
+                  <span className="truncate">ব্র্যান্ড ওএস সেটআপ</span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-mono">
+                    DNA
+                  </span>
+                </div>
+              )}
             </button>
           </div>
 

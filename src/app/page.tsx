@@ -23,6 +23,7 @@ import { CreateBrandModal } from '@/components/CreateBrandModal';
 import { AdminConsoleModal } from '@/components/AdminConsoleModal';
 import { LoginScreen } from '@/components/LoginScreen';
 import { Sidebar } from '@/components/Sidebar';
+import { BrandSetupView } from '@/components/BrandSetupView';
 import { PromptConfig } from '@/types';
 import { BrandProfile, INITIAL_BRANDS } from '@/data/brands';
 import { AuthSession } from '@/types/auth';
@@ -45,6 +46,7 @@ export default function Home() {
   });
   const [isOpenMobileSidebar, setIsOpenMobileSidebar] = useState<boolean>(false);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('all');
+  const [activeView, setActiveView] = useState<'dashboard' | 'brand-setup'>('dashboard');
 
   // Settings State
   const [apiKey, setApiKey] = useState<string>('');
@@ -196,6 +198,18 @@ export default function Home() {
     handleSelectBrand(newBrand);
   };
 
+  const handleUpdateBrand = (updatedBrand: BrandProfile) => {
+    setBrands((prev) => {
+      const updated = prev.map(b => b.id === updatedBrand.id ? updatedBrand : b);
+      try {
+        localStorage.setItem('brand_workspaces', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+  };
+
   const handleSaveApiKey = (newKey: string, newModel: string) => {
     setApiKey(newKey);
     setSelectedModel(newModel);
@@ -302,6 +316,7 @@ export default function Home() {
         isOpenMobile={isOpenMobileSidebar}
         totalHistoryCount={promptHistory.length}
         activeCategoryFilter={activeCategoryFilter}
+        activeView={activeView}
         isGeminiConnected={isGeminiConnected}
         selectedModel={selectedModel}
         onToggleCollapse={toggleSidebarCollapse}
@@ -312,6 +327,7 @@ export default function Home() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenAdminConsole={() => setIsAdminConsoleOpen(true)}
         onSelectCategoryFilter={(cat) => setActiveCategoryFilter(cat)}
+        onChangeView={setActiveView}
         onLogout={handleLogout}
       />
 
@@ -354,7 +370,15 @@ export default function Home() {
 
             {/* Right: Quick Action & Shortcuts */}
             <div className="flex items-center gap-2">
-              {activeCategoryFilter !== 'all' && (
+              {activeView === 'brand-setup' ? (
+                <button
+                  onClick={() => setActiveView('dashboard')}
+                  className="py-1.5 px-3 bg-[#16141F] hover:bg-[#201D2A] border border-[#2B2738] text-amber-300 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 active:scale-95 shadow-sm"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>হিস্ট্রিতে ফিরুন</span>
+                </button>
+              ) : activeCategoryFilter !== 'all' ? (
                 <button
                   onClick={() => setActiveCategoryFilter('all')}
                   className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 transition-colors flex items-center gap-1"
@@ -362,7 +386,7 @@ export default function Home() {
                   <span>ফিল্টার ক্লিয়ার</span>
                   <span className="text-xs">✕</span>
                 </button>
-              )}
+              ) : null}
 
               <button
                 onClick={() => openWizardAt(1)}
@@ -379,7 +403,14 @@ export default function Home() {
         {/* Main Content Area */}
         <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12">
           
-          {visibleHistory.length === 0 ? (
+          {activeView === 'brand-setup' ? (
+            <BrandSetupView
+              session={session}
+              activeBrand={activeBrand}
+              onUpdateBrand={handleUpdateBrand}
+              onOpenWizard={() => openWizardAt(1)}
+            />
+          ) : visibleHistory.length === 0 ? (
             /* EMPTY STATE (When no prompts created yet) */
             <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-5 animate-fade-in">
               <div className="w-16 h-16 rounded-3xl bg-[#141219] border border-[#2A2635] flex items-center justify-center shadow-xl text-3xl">
