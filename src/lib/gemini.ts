@@ -1,8 +1,7 @@
 /**
- * Robust Multi-Engine AI Image Generator for Cake Slice by Farjana
+ * Robust Multi-Engine AI Integration for Cake Slice by Farjana
  * 1. Gemini Vision analyzes the user's cake (shape, colors, piping, toppings).
- * 2. Generates photorealistic editorial scenes using FLUX 8K / Imagen 3.
- * 3. Guaranteed zero-failure pipeline.
+ * 2. Generates photorealistic editorial scenes via secure server-side route.
  */
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
@@ -27,7 +26,7 @@ export async function testGeminiConnection(apiKey: string, model: string = DEFAU
     if (!response.ok) {
       return { success: false, message: data.error?.message || response.statusText };
     }
-    return { success: true, message: `Connected to Gemini successfully!` };
+    return { success: true, message: `Connected to Gemini Pro successfully!` };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return { success: false, message: `Connection failed: ${msg}` };
@@ -48,20 +47,11 @@ export async function analyzeCakeVisuals(params: {
 }> {
   const { apiKey, imageBase64 } = params;
 
-  // Fallback analysis if API key is not yet set
-  if (!apiKey || apiKey.trim() === '') {
-    return {
-      cakeDescription: 'Handcrafted luxury artisanal cake with delicate buttercream piping and refined textures',
-      colors: ['Ivory', 'Gold', 'Pastel'],
-      features: 'Artisanal rosettes and smooth finish',
-      suggestedBase: 'raw travertine stone slab'
-    };
-  }
+  if (apiKey && apiKey.trim().length > 5) {
+    try {
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
 
-  try {
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-
-    const prompt = `
+      const prompt = `
 Analyze this uploaded cake image for luxury bakery "Cake Slice by Farjana".
 Identify:
 1. Physical description: shape, tiers, buttercream piping style, colors, decorations.
@@ -76,39 +66,40 @@ Return strictly JSON:
 }
 `;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: 'image/jpeg',
-                  data: base64Data
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: prompt },
+                {
+                  inlineData: {
+                    mimeType: 'image/jpeg',
+                    data: base64Data
+                  }
                 }
-              }
-            ]
+              ]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: 'application/json'
           }
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: 'application/json'
-        }
-      })
-    });
+        })
+      });
 
-    const data = await response.json();
-    if (response.ok) {
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      const cleaned = text.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-      return JSON.parse(cleaned);
+      const data = await response.json();
+      if (response.ok) {
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        const cleaned = text.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+        return JSON.parse(cleaned);
+      }
+    } catch (e) {
+      console.warn('Gemini vision analysis fallback:', e);
     }
-  } catch (e) {
-    console.warn('Gemini vision analysis fallback:', e);
   }
 
   return {
@@ -121,37 +112,27 @@ Return strictly JSON:
 
 /**
  * Step 2: High-Quality Photorealistic Image Generator
- * Uses FLUX.1 8K Engine + Imagen Fallback (Guaranteed to work 100% without quota or model-not-found errors)
+ * Calls internal Next.js server-side endpoint (/api/generate-image) to avoid browser CORS/timeout issues
  */
 export async function generateEditorialImage(params: {
   apiKey?: string;
   prompt: string;
+  preset?: string;
+  cakeDetails?: unknown;
 }): Promise<string> {
-  const { prompt } = params;
+  const response = await fetch('/api/generate-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
 
-  // Clean and optimize prompt for 4:5 editorial luxury realism
-  const cleanPrompt = encodeURIComponent(
-    `${prompt}, high-end magazine editorial, Vogue Living aesthetic, award-winning photography, Hasselblad H6D-100c, 8k, photorealistic, sharp focus, masterwork, cinematic lighting`
-  );
+  const data = await response.json();
 
-  const seed = Math.floor(Math.random() * 999999);
-  
-  // High-performance FLUX.1 generation endpoint (864x1080 = exact 4:5 aspect ratio)
-  const fluxUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=864&height=1080&model=flux&seed=${seed}&nologo=true&enhance=true`;
-
-  // Pre-load the image to make sure it loads and cache it as base64
-  const response = await fetch(fluxUrl);
-  if (!response.ok) {
-    throw new Error('Image generation server is currently busy. Please try again.');
+  if (!response.ok || !data.imageUrl) {
+    throw new Error(data.error || 'ইমেজ জেনারেটরে সাময়িক চাপ রয়েছে, দয়া করে আরেকবার চেষ্টা করুন।');
   }
 
-  const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+  return data.imageUrl;
 }
 
 /**
