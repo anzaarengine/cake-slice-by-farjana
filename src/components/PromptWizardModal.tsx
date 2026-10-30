@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   X, 
   ArrowRight, 
@@ -54,9 +54,15 @@ export const PromptWizardModal: React.FC<PromptWizardModalProps> = ({
   const [step, setStep] = useState<1 | 2 | 3 | 4>(initialStep);
 
   // Selections
-  const [selectedHeadline, setSelectedHeadline] = useState<string>('প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি');
+  const [selectedHeadline, setSelectedHeadline] = useState<string>(activeBrand?.defaultHeadlines[0]?.text || 'এক চিলতে মিষ্টি হাসি');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  useEffect(() => {
+    if (activeBrand?.defaultHeadlines?.[0]?.text) {
+      setSelectedHeadline(activeBrand.defaultHeadlines[0].text);
+    }
+  }, [activeBrand]);
   
   // Typo selection & filter
   const [selectedTypoStyle, setSelectedTypoStyle] = useState<string>('brush');
@@ -177,7 +183,11 @@ export const PromptWizardModal: React.FC<PromptWizardModalProps> = ({
     const compositionBlock = `COMPOSITION & CANVAS (Aspect Ratio: ${selectedRatio}):\nThe ${productNoun} rests gracefully in the bottom 25% of the frame, resting naturally on ${pedestalText}. The top 75% of the canvas MUST be completely empty, ${backgroundDesc}. High-end luxury magazine editorial layout, zero clutter, and no random props.`;
 
     if (mode === 'composition') {
-      return `Act as a world-class Art Director for my luxury ${currentBrand.productTypeEn} brand "${currentBrand.nameEn}". Refer to the attached raw photo of my product.
+      const compHeader = currentBrandOption === 'none'
+        ? `Act as an elite luxury Art Director and high-fashion editorial photographer for bespoke ${productNoun}. Refer to the attached raw photo of my product.`
+        : `Act as a world-class Art Director for my luxury ${currentBrand.productTypeEn} brand "${currentBrand.nameEn}". Refer to the attached raw photo of my product.`;
+
+      return `${compHeader}
 
 ${preservationBlock}
 
@@ -191,30 +201,41 @@ IMPORTANT: Leave the upper 75% canvas completely clean and text-free — absolut
 High-end luxury magazine advertising photograph, 8k resolution, photorealistic. --ar ${selectedRatio}`;
     }
 
+    let headerLine = '';
     let brandInstruction = '';
+
     if (currentBrandOption === 'none') {
-      brandInstruction = `STRICT TEXT & BRANDING RULES (NO EXTRA LOGOS OR BRAND TEXT):
-Render ONLY the single emotional Bengali headline: "${headline}".
-Strictly DO NOT generate "${currentBrand.nameEn}", "${currentBrand.nameBn}", or any English or brand name text anywhere in the image. No secondary subheadings, no logos. Keep the canvas clean with ONLY this single headline.`;
+      headerLine = `Act as an elite luxury Art Director and high-fashion advertising photographer for bespoke ${productNoun}. Refer to the attached raw photo of my product.`;
+      brandInstruction = `EXCLUSIVE TYPOGRAPHY SPECIFICATION (STRICT - SINGLE PHRASE ONLY):
+Render ONLY one single typography line: "${headline}".
+There must be NO other text, no company or brand names, no secondary subheadings, no micro-logos, and no English text anywhere on the canvas. The entire image must contain strictly and exclusively this single phrase: "${headline}".`;
     } else if (currentBrandOption === 'subtle') {
+      headerLine = `Act as a world-class Art Director for my luxury ${currentBrand.productTypeEn} brand "${currentBrand.nameEn}". Refer to the attached raw photo of my product.`;
       brandInstruction = `BRAND SIGNATURE:
 Primary headline: "${headline}".
 Far below the headline or in a quiet lower corner, place an ultra-small, discreet, minimalist micro-signature: "${currentBrand.nameBn}" (tiny subtle font size, strictly understated, never competing with or overpowering the headline).`;
     } else {
+      headerLine = `Act as a world-class Art Director for my luxury ${currentBrand.productTypeEn} brand "${currentBrand.nameEn}". Refer to the attached raw photo of my product.`;
       brandInstruction = `BRANDING:
 Feature the headline "${headline}" with a balanced, modest subtitle "${currentBrand.nameBn}" underneath (kept tasteful, medium-small, and never oversized).`;
     }
 
     let sizeInstruction = '';
     if (currentSize === 'refined') {
-      sizeInstruction = `TYPOGRAPHY SCALE & NEGATIVE SPACE (CRITICAL - DO NOT MAKE TEXT GIGANTIC):
-The headline typography MUST be refined, elegant, and moderate-to-small in scale (occupying only 12-18% of the upper negative space). Do NOT render oversized, gigantic, wall-dominating, or thick lettering. The vast, uncluttered negative breathing space around the typography is the primary hallmark of high-end luxury editorial design.`;
+      sizeInstruction = `TYPOGRAPHY SCALE & LUXURY EDITORIAL SPACING:
+- Font Scale: Delicate, subtle, and petite (small headline font size with thin, fine, elegant calligraphic strokes).
+- Negative Space: At least 80% to 85% of the upper wall canvas MUST remain completely empty, clean, and bare.
+- Placement: Centered in the upper negative space with generous wide margins on top, left, and right.
+- Aesthetics: Understated high-fashion magazine editorial headline, soft and graceful whisper rather than a loud banner.`;
     } else if (currentSize === 'medium') {
       sizeInstruction = `TYPOGRAPHY SCALE & NEGATIVE SPACE:
-The typography should have a balanced medium scale (approx 20-25% of the upper negative space) with comfortable breathing room. Avoid oversized lettering.`;
+- Font Scale: Balanced medium font size with clean proportions.
+- Negative Space: At least 70% of the upper background canvas remains empty breathing space.
+- Placement: Centered with comfortable margins.`;
     } else {
       sizeInstruction = `TYPOGRAPHY SCALE & NEGATIVE SPACE:
-The typography can be bold and visually prominent in the upper area, while retaining clean margins and breathing room.`;
+- Font Scale: Prominent, bold editorial typography.
+- Negative Space: Clean margins around the text.`;
     }
 
     const typoBlock = `BENGALI TYPOGRAPHY TREATMENT:
@@ -226,7 +247,7 @@ ${brandInstruction}
 
 ${sizeInstruction}`;
 
-    return `Act as a world-class Art Director for my luxury ${currentBrand.productTypeEn} brand "${currentBrand.nameEn}". Refer to the attached raw photo of my product.
+    return `${headerLine}
 
 ${preservationBlock}
 
@@ -565,7 +586,7 @@ High-end luxury magazine advertising photograph, 8k resolution, photorealistic. 
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
                       <Tag className="w-3.5 h-3.5 text-amber-400" />
-                      ব্র্যান্ড নাম (&quot;কেক স্লাইস বাই ফারজানা&quot;)
+                      ব্র্যান্ড নাম (&quot;{currentBrand.nameBn}&quot;)
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 font-mono">
                       {brandOption === 'none' ? 'বাদ দেওয়া' : brandOption === 'subtle' ? 'ছোট সিগনেচার' : 'পূর্ণ'}
@@ -902,13 +923,21 @@ High-end luxury magazine advertising photograph, 8k resolution, photorealistic. 
               {/* Prompt Mode Toggle */}
               <div className="flex items-center gap-2 p-1 bg-[#0D0C10] border border-[#2D2936] rounded-xl">
                 <button
-                  onClick={() => { setPromptMode('full'); const h = selectedHeadline.trim() || 'প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি'; setFinalPrompt(buildPrompt('full', h)); }}
+                  onClick={() => {
+                    setPromptMode('full');
+                    const h = selectedHeadline.trim() || (currentBrand.defaultHeadlines[0]?.text || 'এক চিলতে মিষ্টি হাসি');
+                    setFinalPrompt(buildPrompt('full', h, brandOption, textSizeOption));
+                  }}
                   className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${promptMode === 'full' ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
                   ✍️ টাইপোগ্রাফি সহ (সম্পূর্ণ)
                 </button>
                 <button
-                  onClick={() => { setPromptMode('composition'); const h = selectedHeadline.trim() || 'প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি'; setFinalPrompt(buildPrompt('composition', h)); }}
+                  onClick={() => {
+                    setPromptMode('composition');
+                    const h = selectedHeadline.trim() || (currentBrand.defaultHeadlines[0]?.text || 'এক চিলতে মিষ্টি হাসি');
+                    setFinalPrompt(buildPrompt('composition', h, brandOption, textSizeOption));
+                  }}
                   className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${promptMode === 'composition' ? 'bg-emerald-500 text-black' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
                   🎨 শুধু কম্পোজিশন (রিকমেন্ডেড)
