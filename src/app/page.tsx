@@ -1,66 +1,142 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Navbar } from '@/components/Navbar';
-import { StudioTab } from '@/components/StudioTab';
-import { CarouselTab } from '@/components/CarouselTab';
-import { VideoTab } from '@/components/VideoTab';
-import { CopywriterTab } from '@/components/CopywriterTab';
-import { SettingsModal } from '@/components/SettingsModal';
-import { PromptWizardModal } from '@/components/PromptWizardModal';
-import { PromptConfig } from '@/types';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Sparkles, 
-  PlusCircle, 
   Copy, 
   Check, 
   ExternalLink, 
-  Clock, 
-  Layers, 
-  Crop, 
-  HeartHandshake
+  Settings, 
+  Trash2, 
+  RotateCcw,
+  Layers,
+  Palette,
+  Terminal,
+  ArrowUpRight
 } from 'lucide-react';
+import { PromptWizardModal } from '@/components/PromptWizardModal';
+import { SettingsModal } from '@/components/SettingsModal';
+import { PromptConfig } from '@/types';
+import { BACKGROUND_STYLES } from '@/data/backgroundStyles';
+import { TYPOGRAPHY_STYLES } from '@/data/typographyStyles';
+import { PEDESTAL_OPTIONS } from '@/data/pedestals';
+
+const DEFAULT_ACTIVE_PROMPT: PromptConfig = {
+  headline: 'এক চিলতে মিষ্টি হাসি',
+  imageStyle: 'organic-earth',
+  typoStyle: 'brush',
+  ratio: '4:5',
+  basePedestal: 'auto',
+  brandOption: 'none',
+  textSizeOption: 'refined',
+  generatedPrompt: `Act as a world-class Art Director for my luxury bakery brand "Cake Slice by Farjana". Refer to the attached raw photo of my cake.
+
+CRITICAL CAKE PRESERVATION:
+Keep the cake from the uploaded photo 100% authentic and unaltered—preserve its exact frosting textures, colors, piping decorations, and topper in high-fidelity without AI re-imagination or distortion. The cake is a round celebration cake with: white smooth frosting on top featuring crossword-style piped lettering in dark chocolate, ocean teal-blue textured buttercream sides scattered with blue candy dots and white pearl sprinkles, elegant gold leaf foil accents at the base band, and a golden acrylic calligraphy topper in the front.
+
+COMPOSITION & CANVAS (Aspect Ratio: 4:5):
+The cake sits gracefully in the bottom 25% of the frame, resting naturally on a complementary bespoke natural base dynamically chosen to elevate the cake's authentic colors and design—such as a hand-carved dark wood block, a raw travertine slab, a matte artisanal ceramic platter, or a light-oak timber block, ensuring the placement looks organic and never repetitive. The top 75% of the canvas MUST be completely empty, an empty, seamless warm taupe, sand, or light beige plaster wall, offering massive breathing space. High-end luxury magazine editorial layout, zero clutter, and no random props.
+
+LIGHTING & ATMOSPHERE:
+Soft, natural ambient daylight wraps gently around the cake and its base, casting realistic delicate shadows with grounded earthy calmness and serene luxury.
+
+BENGALI TYPOGRAPHY TREATMENT:
+In the spacious upper background, render the typography strictly in the Artistic Brush Stroke style:
+Brush Strokes / Artistic Brush style in off-white and rich light-gold dual tones. The letters feature rough, hand-painted artistic brushwork with authentic visible bristle textures, expressive sweep effects, dynamic paint strokes, and subtle 3D shading that casts soft shadows on the background.
+Ensure the lettering appears organically integrated into the scene with natural 3D depth and subtle ambient shadows against the wall.
+
+STRICT TEXT & BRANDING RULES (NO EXTRA LOGOS OR BRAND TEXT):
+Render ONLY the single emotional Bengali headline: "এক চিলতে মিষ্টি হাসি".
+Strictly DO NOT generate "Cake Slice by Farjana", "কেক স্লাইস", "বাই ফারজানা", or any English or bakery brand name text anywhere in the image. No bakery subheadings, no secondary logos. Keep the canvas clean with ONLY this single headline.
+
+TYPOGRAPHY SCALE & NEGATIVE SPACE (CRITICAL - DO NOT MAKE TEXT GIGANTIC):
+The headline typography MUST be refined, elegant, and moderate-to-small in scale (occupying only 12-18% of the upper negative space). Do NOT render oversized, gigantic, wall-dominating, or thick lettering. The vast, uncluttered negative breathing space around the typography is the primary hallmark of high-end luxury editorial design.
+
+High-end luxury magazine advertising photograph, 8k resolution, photorealistic. --ar 4:5`,
+  createdAt: 'প্রস্তুত'
+};
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'studio' | 'carousel' | 'video' | 'copywriter'>('studio');
   const [apiKey, setApiKey] = useState<string>('');
   const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash');
   
   // Modals
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   
   // Prompt History
-  const [promptHistory, setPromptHistory] = useState<PromptConfig[]>([]);
-  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [promptHistory, setPromptHistory] = useState<PromptConfig[]>([DEFAULT_ACTIVE_PROMPT]);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
-  // Load from localStorage
+  // Load state from localStorage on mount
   useEffect(() => {
     setIsMounted(true);
+
+    if (typeof window !== 'undefined' && window.location.search.includes('wizard')) {
+      const params = new URLSearchParams(window.location.search);
+      const stepVal = params.get('wizard');
+      if (stepVal === '2') setWizardStep(2);
+      else if (stepVal === '3') setWizardStep(3);
+      else if (stepVal === '4') setWizardStep(4);
+      else setWizardStep(1);
+      setIsWizardOpen(true);
+    }
+
     const savedKey = localStorage.getItem('cake_slice_gemini_key') || '';
     const savedModel = localStorage.getItem('cake_slice_gemini_model') || 'gemini-2.5-flash';
     setApiKey(savedKey);
     setSelectedModel(savedModel);
 
-    // Initial default prompt in history
+    // Load saved prompt history if exists
+    try {
+      const savedHistory = localStorage.getItem('cake_slice_prompts_history');
+      if (savedHistory) {
+        const parsed = JSON.parse(savedHistory);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPromptHistory(parsed);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // Default pristine initial prompt
     setPromptHistory([
       {
-        headline: 'প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি',
+        headline: 'এক চিলতে মিষ্টি হাসি',
         imageStyle: 'organic-earth',
-        typoStyle: 'fluid',
+        typoStyle: 'brush',
         ratio: '4:5',
-        generatedPrompt: `An editorial, ultra-premium advertising photograph in a 4:5 aspect ratio, featuring the user's uploaded cake situated strictly in the bottom 25% of the frame. The cake rests on an authentic raw travertine stone slab (natural porous earth stone), retaining its authentic original textures, frosting, decorations, and colors in high-fidelity.
+        basePedestal: 'auto',
+        brandOption: 'none',
+        textSizeOption: 'refined',
+        generatedPrompt: `Act as a world-class Art Director for my luxury bakery brand "Cake Slice by Farjana". Refer to the attached raw photo of my cake.
 
-The top 75% of the canvas is an empty, seamless warm taupe, sand, or light-beige plaster wall, leaving massive breathing space. Soft, natural diffused ambient lighting gently illuminates the cake and its unique base, casting realistic delicate shadows with grounded earthy calmness.
+CRITICAL CAKE PRESERVATION:
+Keep the cake from the uploaded photo 100% authentic and unaltered—preserve its exact frosting textures, colors, piping decorations, and topper in high-fidelity without AI re-imagination or distortion. The cake is a round celebration cake with: white smooth frosting on top featuring crossword-style piped lettering in dark chocolate, ocean teal-blue textured buttercream sides scattered with blue candy dots and white pearl sprinkles, elegant gold leaf foil accents at the base band, and a golden acrylic calligraphy topper in the front.
 
-In the upper spacious background, elegant 3D embossed Bengali typography is prominently featured in rich dark-brown and warm bronze/gold liquid tones with natural flow and soft shadow depth:
-- Main Emotional Headline: "প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি"
-- Brand Name directly below: "কেক স্লাইস" (Line 1) and "বাই ফারজানা" (Line 2)
-- Typographical Artistic Treatment: strictly in the Fluid / Liquid style, characterized by smooth, organic, boldly curved shapes with natural flow, dynamic loops, and interconnected letters as if written with thick flowing liquid.
-- Small understated English subtitle at bottom: "~ PREMIUM CAKES ~"
+COMPOSITION & CANVAS (Aspect Ratio: 4:5):
+The cake sits gracefully in the bottom 25% of the frame, resting naturally on a complementary bespoke natural base dynamically chosen to elevate the cake's authentic colors and design—such as a hand-carved dark wood block, a raw travertine slab, a matte artisanal ceramic platter, or a light-oak timber block, ensuring the placement looks organic and never repetitive. The top 75% of the canvas MUST be completely empty, an empty, seamless warm taupe, sand, or light beige plaster wall, offering massive breathing space. High-end luxury magazine editorial layout, zero clutter, and no random props.
 
-The image is clean, highly aesthetic, completely devoid of clutter or random props, strictly holding a luxury magazine cover layout. 8k, photorealistic. --ar 4:5`,
+LIGHTING & ATMOSPHERE:
+Soft, natural ambient daylight wraps gently around the cake and its base, casting realistic delicate shadows with grounded earthy calmness and serene luxury.
+
+BENGALI TYPOGRAPHY TREATMENT:
+In the spacious upper background, render the typography strictly in the Artistic Brush Stroke style:
+Brush Strokes / Artistic Brush style in off-white and rich light-gold dual tones. The letters feature rough, hand-painted artistic brushwork with authentic visible bristle textures, expressive sweep effects, dynamic paint strokes, and subtle 3D shading that casts soft shadows on the background.
+Ensure the lettering appears organically integrated into the scene with natural 3D depth and subtle ambient shadows against the wall.
+
+STRICT TEXT & BRANDING RULES (NO EXTRA LOGOS OR BRAND TEXT):
+Render ONLY the single emotional Bengali headline: "এক চিলতে মিষ্টি হাসি".
+Strictly DO NOT generate "Cake Slice by Farjana", "কেক স্লাইস", "বাই ফারজানা", or any English or bakery brand name text anywhere in the image. No bakery subheadings, no secondary logos. Keep the canvas clean with ONLY this single headline.
+
+TYPOGRAPHY SCALE & NEGATIVE SPACE (CRITICAL - DO NOT MAKE TEXT GIGANTIC):
+The headline typography MUST be refined, elegant, and moderate-to-small in scale (occupying only 12-18% of the upper negative space). Do NOT render oversized, gigantic, wall-dominating, or thick lettering. The vast, uncluttered negative breathing space around the typography is the primary hallmark of high-end luxury editorial design.
+
+High-end luxury magazine advertising photograph, 8k resolution, photorealistic. --ar 4:5`,
         createdAt: 'এখন প্রস্তুত'
       }
     ]);
@@ -74,91 +150,170 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
   };
 
   const handleSavePrompt = (newPrompt: PromptConfig) => {
-    setPromptHistory((prev) => [newPrompt, ...prev]);
+    setPromptHistory((prev) => {
+      const updated = [newPrompt, ...prev.slice(0, 19)];
+      try {
+        localStorage.setItem('cake_slice_prompts_history', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
   };
 
-  const copyPrompt = (text: string, index: number) => {
+  const handleDeletePrompt = (indexToDelete: number) => {
+    setPromptHistory((prev) => {
+      const updated = prev.filter((_, idx) => idx !== indexToDelete);
+      try {
+        localStorage.setItem('cake_slice_prompts_history', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+  };
+
+  const copyPromptText = (text: string, idx: number) => {
     navigator.clipboard.writeText(text);
-    setCopiedId(index);
-    setTimeout(() => setCopiedId(null), 2500);
+    setCopiedIndex(idx);
+    setTimeout(() => setCopiedIndex(null), 2000);
   };
 
-  if (!isMounted) {
-    return <div className="min-h-screen bg-[#070608]" />;
-  }
+  const openWizardAt = (stepNum: 1 | 2 | 3 | 4) => {
+    setWizardStep(stepNum);
+    setIsWizardOpen(true);
+  };
 
-  const latestPrompt = promptHistory[0];
+  const activePrompt = promptHistory[0];
+
+  const activeBgObj = useMemo(() => {
+    if (!activePrompt) return BACKGROUND_STYLES[0];
+    return BACKGROUND_STYLES.find(b => b.id === activePrompt.imageStyle) || BACKGROUND_STYLES[0];
+  }, [activePrompt]);
+
+  const activeTypoObj = useMemo(() => {
+    if (!activePrompt) return TYPOGRAPHY_STYLES[0];
+    return TYPOGRAPHY_STYLES.find(t => t.id === activePrompt.typoStyle) || TYPOGRAPHY_STYLES[0];
+  }, [activePrompt]);
+
+  const activePedestalObj = useMemo(() => {
+    if (!activePrompt) return PEDESTAL_OPTIONS[0];
+    return PEDESTAL_OPTIONS.find(p => p.id === activePrompt.basePedestal) || PEDESTAL_OPTIONS[0];
+  }, [activePrompt]);
+
+  // Render immediately for instant SSR/paint, state syncs via useEffect
+
+  const isGeminiConnected = Boolean(apiKey && apiKey.trim().length > 10);
 
   return (
-    <div className="min-h-screen bg-[#070608] text-zinc-100 flex flex-col font-sans selection:bg-[#DFBA75] selection:text-black">
-      {/* Top Navbar */}
-      <Navbar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        isGeminiConnected={Boolean(apiKey && apiKey.trim().length > 10)}
-      />
-
-      {/* Main Content Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* HERO BANNER & MAIN CTA BUTTON */}
-        <div className="mb-8 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#141217] via-[#1C1824] to-[#121016] border border-[#2B2735] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
-          <div className="relative z-10">
-            <span className="text-[10px] tracking-[0.35em] uppercase text-[#DFBA75] font-bold block mb-1">
-              EDITORIAL PROMPT STUDIO & ARCHITECTURE
-            </span>
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-serif font-black text-zinc-100">
-              Cake Slice by Farjana (কেক স্লাইস বাই ফারজানা)
-            </h1>
-            <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-2xl leading-relaxed">
-              আপনার কেকের কাঁচা ছবি আর আমাদের তৈরি মাস্টার প্রম্পট জেমিনি চ্যাটে দিলেই নিমেষেই তৈরি হবে ২নং ছবির মতো আর্ট ডিরেক্টর গ্রেড ভিজ্যুয়াল।
-            </p>
+    <div className="min-h-screen bg-[#070609] text-zinc-100 flex flex-col font-sans selection:bg-[#DFBA75] selection:text-black antialiased">
+      
+      {/* 1. Ultra-Minimalist Header Bar */}
+      <header className="sticky top-0 z-40 w-full bg-[#09080D]/80 backdrop-blur-xl border-b border-[#1E1B24]">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          
+          {/* Brand Mark */}
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#1E1712] via-[#2F2116] to-[#453221] border border-[#DFBA75]/40 flex items-center justify-center shadow-sm">
+              <span className="font-serif font-black text-sm text-[#DFBA75]">কে</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-serif font-bold text-sm tracking-wide text-zinc-100">
+                Cake Slice
+              </span>
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300">
+                Studio Pro
+              </span>
+            </div>
           </div>
 
-          {/* MAIN PROMPT CREATION BUTTON (User's primary requested button) */}
-          <div className="relative z-10 shrink-0 w-full md:w-auto">
+          {/* Right Controls */}
+          <div className="flex items-center gap-2.5">
             <button
-              onClick={() => setIsWizardOpen(true)}
-              className="w-full md:w-auto py-4 px-7 rounded-2xl bg-gradient-to-r from-[#DFBA75] via-[#F4D998] to-[#C99C47] text-black font-extrabold text-sm sm:text-base flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(223,186,117,0.3)] hover:scale-[1.03] active:scale-[0.98] transition-all"
+              onClick={() => openWizardAt(1)}
+              className="py-1.5 px-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-xl shadow-md shadow-amber-500/15 flex items-center gap-1.5 active:scale-95 transition-all"
             >
-              <Sparkles className="w-5 h-5 text-black" />
-              <span>✨ নতুন ইমেজ প্রম্পট তৈরি করুন</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>নতুন প্রম্পট</span>
+            </button>
+
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 rounded-xl bg-[#141218] hover:bg-[#1C1A22] border border-[#272431] text-zinc-400 hover:text-zinc-200 transition-colors"
+              title="API সেটিংস"
+            >
+              <div className="relative">
+                <Settings className="w-4 h-4" />
+                <span className={`absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full ${isGeminiConnected ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              </div>
             </button>
           </div>
 
-          {/* Subtle gold decorative glow */}
-          <div className="absolute right-0 top-0 w-80 h-80 bg-[#DFBA75]/10 rounded-full blur-3xl pointer-events-none" />
+        </div>
+      </header>
+
+      {/* 2. Main Minimal Workspace */}
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        
+        {/* Top Minimal Action Row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-serif font-black tracking-tight text-white flex items-center gap-2">
+              আর্ট ডিরেক্টর প্রম্পট ইঞ্জিন
+            </h1>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              ৮K এডিটোরিয়াল ফটোগ্রাফি • ১০টি লাইটিং আবহ • ১৫টি টাইপোগ্রাফি আর্ট
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={() => openWizardAt(1)}
+              className="py-2.5 px-5 bg-[#17151E] hover:bg-[#201D2A] border border-amber-500/40 hover:border-amber-500 text-amber-300 text-xs font-semibold rounded-2xl flex items-center gap-2 transition-all shadow-sm active:scale-95"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>উইজার্ড ওপেন করুন (৪-স্টেপ)</span>
+            </button>
+          </div>
         </div>
 
-        {/* LATEST GENERATED PROMPT CARD (Appears prominently on the dashboard) */}
-        {latestPrompt && (
-          <div className="mb-8 p-6 rounded-3xl bg-[#111014] border-2 border-[#DFBA75]/40 shadow-2xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#24202D]">
+        {/* Live Active Master Prompt Terminal */}
+        {activePrompt && (
+          <div className="rounded-3xl bg-[#0D0C11] border border-[#23202C] shadow-2xl overflow-hidden">
+            
+            {/* Terminal Window Header */}
+            <div className="px-4 sm:px-5 py-3 bg-[#131117] border-b border-[#211E29] flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs sm:text-sm font-bold text-zinc-100">
-                  সর্বশেষ প্রস্তুত মাস্টার প্রম্পট
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                </div>
+                <div className="h-3 w-[1px] bg-zinc-700 mx-1" />
+                <span className="text-xs font-mono font-medium text-zinc-300 flex items-center gap-1.5">
+                  <Terminal className="w-3.5 h-3.5 text-amber-400" />
+                  master-prompt-active.txt
                 </span>
-                <span className="text-[10px] text-[#DFBA75] bg-[#DFBA75]/10 px-2 py-0.5 rounded-full border border-[#DFBA75]/20 font-medium">
-                  {latestPrompt.ratio}
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-medium">
+                  {activePrompt.ratio}
                 </span>
               </div>
 
+              {/* Action Buttons */}
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => copyPrompt(latestPrompt.generatedPrompt, 0)}
-                  className="py-2 px-3.5 bg-[#1C1824] hover:bg-[#272233] border border-[#DFBA75]/40 text-xs font-semibold text-zinc-200 rounded-xl flex items-center gap-1.5 transition-all"
+                  onClick={() => copyPromptText(activePrompt.generatedPrompt, 0)}
+                  className="py-1.5 px-3 bg-[#1E1B26] hover:bg-[#272332] text-xs font-medium text-zinc-200 border border-[#2F2A3B] rounded-xl flex items-center gap-1.5 transition-all active:scale-95"
                 >
-                  {copiedId === 0 ? (
+                  {copiedIndex === 0 ? (
                     <>
-                      <Check className="w-4 h-4 text-emerald-400" />
-                      <span className="text-emerald-400">কপি হয়েছে!</span>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-400">কপি হয়েছে</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-4 h-4 text-[#DFBA75]" />
-                      <span>প্রম্পট কপি করুন</span>
+                      <Copy className="w-3.5 h-3.5 text-amber-400" />
+                      <span>প্রম্পট কপি</span>
                     </>
                   )}
                 </button>
@@ -167,80 +322,164 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
                   href="https://gemini.google.com/app"
                   target="_blank"
                   rel="noreferrer"
-                  onClick={() => navigator.clipboard.writeText(latestPrompt.generatedPrompt)}
-                  className="py-2 px-4 bg-[#DFBA75] hover:bg-[#E8C885] text-black font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-md"
+                  onClick={() => navigator.clipboard.writeText(activePrompt.generatedPrompt)}
+                  className="py-1.5 px-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
                 >
-                  <span>কপি করে Gemini-তে যান</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Gemini খুলুন</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
                 </a>
               </div>
             </div>
 
-            {/* Selected parameters badges */}
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="py-1 px-2.5 rounded-lg bg-[#18161E] border border-zinc-800 text-[#DFBA75] font-semibold">
-                বাংলা লাইন: “{latestPrompt.headline}”
+            {/* Parameter Badges */}
+            <div className="px-4 sm:px-5 py-2.5 bg-[#0A090D] border-b border-[#1E1C25] flex flex-wrap items-center gap-2 text-xs">
+              <span className="px-2.5 py-1 rounded-lg bg-[#141219] border border-[#262330] text-amber-300 font-medium">
+                “{activePrompt.headline}”
               </span>
-              <span className="py-1 px-2.5 rounded-lg bg-[#18161E] border border-zinc-800 text-zinc-300">
-                স্টাইল: {latestPrompt.imageStyle === 'organic-earth' ? 'Organic Earth Tone (২নং ছবি)' : 'Dark & Warm Cinematic'}
+              <span className="px-2 py-0.5 rounded-lg bg-[#141219] border border-[#262330] text-zinc-400 text-[11px]">
+                🎨 {activeBgObj.nameBn}
               </span>
-              <span className="py-1 px-2.5 rounded-lg bg-[#18161E] border border-zinc-800 text-zinc-300 capitalize">
-                টাইপো: {latestPrompt.typoStyle}
+              <span className="px-2 py-0.5 rounded-lg bg-[#141219] border border-[#262330] text-zinc-400 text-[11px]">
+                ✍️ {activeTypoObj.nameBn}
+              </span>
+              <span className="px-2 py-0.5 rounded-lg bg-[#141219] border border-[#262330] text-zinc-400 text-[11px]">
+                🏛️ {activePedestalObj.nameBn}
               </span>
             </div>
 
-            {/* Prompt Text Container */}
-            <div className="p-4 rounded-2xl bg-[#09080B] border border-[#23202B] font-mono text-xs text-zinc-300 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap select-all">
-              {latestPrompt.generatedPrompt}
+            {/* Prompt Code Content */}
+            <div className="p-4 sm:p-5 bg-[#07060A] font-mono text-xs text-zinc-300 leading-relaxed max-h-64 overflow-y-auto whitespace-pre-wrap select-all custom-scrollbar">
+              {activePrompt.generatedPrompt}
             </div>
 
-            <p className="text-[11px] text-zinc-400">
-              💡 <strong>কীভাবে ব্যবহার করবেন:</strong> “কপি করে Gemini-তে যান” বাটনে চাপ দিয়ে Gemini খোলামাত্র আপনার কেকের ছবি ড্রপ করুন এবং <strong>Paste (Ctrl+V)</strong> দিয়ে সেন্ড করুন—২নং ছবির মতো ফলাফল পেয়ে যাবেন!
-            </p>
+            {/* Bottom 1-line note */}
+            <div className="px-4 sm:px-5 py-2 bg-[#0C0B0F] border-t border-[#1B1922] text-[11px] text-zinc-400 flex items-center justify-between">
+              <span>💡 Gemini ওপেন করে আপনার কেকের ছবি ড্রপ করুন এবং পেস্ট করুন।</span>
+              <button
+                onClick={() => openWizardAt(1)}
+                className="text-amber-400 hover:text-amber-300 font-medium"
+              >
+                এডিট করতে চান? উইজার্ড খুলুন →
+              </button>
+            </div>
+
           </div>
         )}
 
-        {/* Tab Views */}
-        {activeTab === 'studio' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between pb-2 border-b border-[#211E28]">
-              <div>
-                <h3 className="text-base font-serif font-bold text-zinc-100">
-                  ৪:৫ লাইভ ভিজ্যুয়াল স্টুডিও ও কাস্টমাইজেশন
-                </h3>
-                <p className="text-xs text-zinc-400">
-                  প্রম্পট দিয়ে জেমিনিতে বানানোর পাশাপাশি আপনি চাইলে সরাসরি এখানেও কেকের ছবি রেখে লাইভ পোস্টার দেখতে ও ডাউনলোড করতে পারেন
-                </p>
-              </div>
+        {/* 3. Ten Real Lighting Styles Strip */}
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+              <Palette className="w-4 h-4 text-amber-400" />
+              ১০টি এডিটোরিয়াল লাইটিং স্টাইল (বাস্তব প্রিভিউ)
+            </h2>
+            <button
+              onClick={() => openWizardAt(3)}
+              className="text-xs text-amber-400 hover:text-amber-300 font-medium"
+            >
+              সবগুলো দেখুন →
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+            {BACKGROUND_STYLES.slice(0, 5).map((bg) => (
+              <button
+                key={bg.id}
+                onClick={() => openWizardAt(3)}
+                className="p-2 rounded-2xl bg-[#110F15] hover:bg-[#1A1722] border border-[#24212C] hover:border-amber-500/50 text-left transition-all group overflow-hidden"
+              >
+                <div className="w-full h-24 rounded-xl overflow-hidden mb-2 relative bg-black/60">
+                  <img
+                    src={bg.previewImg}
+                    alt={bg.nameBn}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                  <span className="absolute bottom-1.5 left-2 text-[10px] font-mono text-zinc-300">
+                    {bg.nameEn}
+                  </span>
+                </div>
+                <div className="text-[11px] font-bold text-zinc-200 truncate group-hover:text-amber-300 transition-colors">
+                  {bg.nameBn}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 4. Prompt History (if more than 1 prompt) */}
+        {promptHistory.length > 1 && (
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-amber-400" />
+                পূর্বের সংরক্ষিত প্রম্পট ({promptHistory.length})
+              </h2>
             </div>
 
-            <StudioTab />
+            <div className="space-y-2">
+              {promptHistory.slice(1, 6).map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-2xl bg-[#0E0C12] border border-[#211E29] hover:border-[#322E3E] flex items-center justify-between gap-3 text-xs transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-zinc-200 truncate">
+                      “{item.headline}”
+                    </div>
+                    <div className="text-[10px] text-zinc-400 flex items-center gap-2 mt-0.5">
+                      <span>{item.imageStyle}</span>
+                      <span>•</span>
+                      <span>{item.typoStyle}</span>
+                      <span>•</span>
+                      <span>{item.ratio}</span>
+                      <span>•</span>
+                      <span>{item.createdAt}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => copyPromptText(item.generatedPrompt, idx + 1)}
+                      className="p-2 rounded-xl bg-[#16141D] hover:bg-[#201D28] text-zinc-300 hover:text-white transition-colors"
+                      title="কপি করুন"
+                    >
+                      {copiedIndex === idx + 1 ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleDeletePrompt(idx + 1)}
+                      className="p-2 rounded-xl bg-[#16141D] hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400 transition-colors"
+                      title="মুছে ফেলুন"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
-        {activeTab === 'carousel' && <CarouselTab />}
-        {activeTab === 'video' && <VideoTab apiKey={apiKey} />}
-        {activeTab === 'copywriter' && <CopywriterTab apiKey={apiKey} />}
 
       </main>
 
-      {/* Footer */}
-      <footer className="w-full border-t border-[#1B1922] py-6 px-4 text-center text-xs text-zinc-500">
-        <p className="font-serif">
-          © {new Date().getFullYear()} Cake Slice by Farjana (কেক স্লাইস বাই ফারজানা). All rights reserved.
-        </p>
-        <p className="text-[10px] text-zinc-600 mt-1">
-          Super-minimalist high-end magazine editorial aesthetics. 100% Bespoke Craft.
-        </p>
+      {/* 5. Minimal Footer */}
+      <footer className="w-full border-t border-[#18161F] py-4 px-4 text-center text-[11px] text-zinc-400">
+        <p>Cake Slice by Farjana • Editorial Art Direction Studio</p>
       </footer>
 
-      {/* Prompt Wizard Step-by-Step Modal */}
+      {/* 6. Wizard Modal */}
       <PromptWizardModal
         isOpen={isWizardOpen}
+        initialStep={wizardStep}
         onClose={() => setIsWizardOpen(false)}
         onSavePrompt={handleSavePrompt}
       />
 
-      {/* Settings Modal */}
+      {/* 7. Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -248,6 +487,7 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
         onSaveApiKey={handleSaveApiKey}
         selectedModel={selectedModel}
       />
+
     </div>
   );
 }

@@ -12,10 +12,19 @@ import {
   Shuffle, 
   Search,
   CheckCircle2,
-  Database
+  Database,
+  Layers,
+  Palette,
+  Ratio as RatioIcon,
+  Flame,
+  Star,
+  Tag
 } from 'lucide-react';
-import { ImageStyleKey, TypoStyleKey, AspectRatioKey, PromptConfig } from '@/types';
+import { ImageStyleKey, TypoStyleKey, AspectRatioKey, BasePedestalKey, PromptConfig } from '@/types';
 import headlinesData from '@/data/headlines.json';
+import { TYPOGRAPHY_STYLES, TypographyStyleItem } from '@/data/typographyStyles';
+import { BACKGROUND_STYLES, BackgroundStyleItem } from '@/data/backgroundStyles';
+import { PEDESTAL_OPTIONS, PedestalItem } from '@/data/pedestals';
 
 interface HeadlineItem {
   text: string;
@@ -26,30 +35,42 @@ const ALL_HEADLINES: HeadlineItem[] = headlinesData as HeadlineItem[];
 
 interface PromptWizardModalProps {
   isOpen: boolean;
+  initialStep?: 1 | 2 | 3 | 4;
   onClose: () => void;
   onSavePrompt: (config: PromptConfig) => void;
 }
 
 export const PromptWizardModal: React.FC<PromptWizardModalProps> = ({
   isOpen,
+  initialStep = 1,
   onClose,
   onSavePrompt
 }) => {
-  // Step state: 1 (Headline), 2 (Style), 3 (Ratio), 4 (Result)
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  // Step state: 1 (Headline), 2 (Typography with Real Previews), 3 (Canvas, Pedestal & Ratio with Real Previews), 4 (Result)
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(initialStep);
 
   // Selections
   const [selectedHeadline, setSelectedHeadline] = useState<string>('প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
-  const [selectedImageStyle, setSelectedImageStyle] = useState<ImageStyleKey>('organic-earth');
-  const [selectedTypoStyle, setSelectedTypoStyle] = useState<TypoStyleKey>('fluid');
+  // Typo selection & filter
+  const [selectedTypoStyle, setSelectedTypoStyle] = useState<string>('brush');
+  const [typoFilter, setTypoFilter] = useState<'locked' | 'all'>('locked');
+
+  // Background, Pedestal & Ratio
+  const [selectedImageStyle, setSelectedImageStyle] = useState<string>('organic-earth');
+  const [selectedPedestal, setSelectedPedestal] = useState<BasePedestalKey>('auto');
   const [selectedRatio, setSelectedRatio] = useState<AspectRatioKey>('4:5');
 
   // Generated Result
   const [finalPrompt, setFinalPrompt] = useState<string>('');
   const [copied, setCopied] = useState(false);
+  const [promptMode, setPromptMode] = useState<'full' | 'composition'>('full');
+  // Brand name option: 'none' (default - no Cake Slice by Farjana), 'subtle' (tiny micro signature), 'full' (prominent)
+  const [brandOption, setBrandOption] = useState<'none' | 'subtle' | 'full'>('none');
+  // Text scale option: 'refined' (modest/small with lots of space), 'medium' (balanced), 'large' (bold)
+  const [textSizeOption, setTextSizeOption] = useState<'refined' | 'medium' | 'large'>('refined');
 
   // Filter headlines by category & search query
   const filteredHeadlines = useMemo(() => {
@@ -60,6 +81,29 @@ export const PromptWizardModal: React.FC<PromptWizardModalProps> = ({
     });
   }, [selectedCategory, searchQuery]);
 
+  // Filter typography styles
+  const filteredTypoStyles = useMemo(() => {
+    if (typoFilter === 'locked') {
+      return TYPOGRAPHY_STYLES.filter(s => s.isLocked);
+    }
+    return TYPOGRAPHY_STYLES;
+  }, [typoFilter]);
+
+  // Selected Typo Object
+  const currentTypoObj = useMemo(() => {
+    return TYPOGRAPHY_STYLES.find(s => s.id === selectedTypoStyle) || TYPOGRAPHY_STYLES[0];
+  }, [selectedTypoStyle]);
+
+  // Selected Background Style Object
+  const currentBgObj = useMemo(() => {
+    return BACKGROUND_STYLES.find(b => b.id === selectedImageStyle) || BACKGROUND_STYLES[0];
+  }, [selectedImageStyle]);
+
+  // Selected Pedestal Object
+  const currentPedestalObj = useMemo(() => {
+    return PEDESTAL_OPTIONS.find(p => p.id === selectedPedestal) || PEDESTAL_OPTIONS[0];
+  }, [selectedPedestal]);
+
   if (!isOpen) return null;
 
   // Shuffle headline
@@ -69,61 +113,93 @@ export const PromptWizardModal: React.FC<PromptWizardModalProps> = ({
     if (item) setSelectedHeadline(item.text);
   };
 
-  // Generate Master Prompt based on all 3 user choices
+  // Generate Master Prompt based strictly on Chat 1 & Chat 2 Approved Formats
+  const buildPrompt = (
+    mode: 'full' | 'composition',
+    headline: string,
+    currentBrand: 'none' | 'subtle' | 'full' = brandOption,
+    currentSize: 'refined' | 'medium' | 'large' = textSizeOption
+  ): string => {
+    const pedestalText = currentPedestalObj.promptDescription;
+    const backgroundDesc = currentBgObj.promptBackgroundDesc;
+    const lightingDesc = currentBgObj.promptLightingDesc;
+    const typoTreatmentDesc = currentTypoObj.treatmentPrompt;
+
+    // Specific visual description of the actual brand cake — injected for high-fidelity preservation
+    const cakeVisualDesc = 'The cake is a round celebration cake with: white smooth frosting on top featuring crossword-style piped lettering in dark chocolate, ocean teal-blue textured buttercream sides scattered with blue candy dots and white pearl sprinkles, elegant gold leaf foil accents at the base band, and a golden acrylic calligraphy topper in the front.';
+
+    const preservationBlock = `CRITICAL CAKE PRESERVATION:\nKeep the cake from the uploaded photo 100% authentic and unaltered—preserve its exact frosting textures, colors, piping decorations, and topper in high-fidelity without AI re-imagination or distortion. ${cakeVisualDesc}`;
+
+    const compositionBlock = `COMPOSITION & CANVAS (Aspect Ratio: ${selectedRatio}):\nThe cake sits gracefully in the bottom 25% of the frame, resting naturally on ${pedestalText}. The top 75% of the canvas MUST be completely empty, ${backgroundDesc}. High-end luxury magazine editorial layout, zero clutter, and no random props.`;
+
+    if (mode === 'composition') {
+      return `Act as a world-class Art Director for my luxury bakery brand "Cake Slice by Farjana". Refer to the attached raw photo of my cake.
+
+${preservationBlock}
+
+${compositionBlock}
+
+LIGHTING & ATMOSPHERE:
+${lightingDesc}
+
+IMPORTANT: Leave the upper 75% canvas completely clean and text-free — absolutely NO typography, NO overlays, and NO brand text. This space is strictly reserved for post-production text design.
+
+High-end luxury magazine advertising photograph, 8k resolution, photorealistic. --ar ${selectedRatio}`;
+    }
+
+    let brandInstruction = '';
+    if (currentBrand === 'none') {
+      brandInstruction = `STRICT TEXT & BRANDING RULES (NO EXTRA LOGOS OR BRAND TEXT):
+Render ONLY the single emotional Bengali headline: "${headline}".
+Strictly DO NOT generate "Cake Slice by Farjana", "কেক স্লাইস", "বাই ফারজানা", or any English or bakery brand name text anywhere in the image. No bakery subheadings, no secondary logos. Keep the canvas clean with ONLY this single headline.`;
+    } else if (currentBrand === 'subtle') {
+      brandInstruction = `BRAND SIGNATURE:
+Primary headline: "${headline}".
+Far below the headline or in a quiet lower corner, place an ultra-small, discreet, minimalist micro-signature: "কেক স্লাইস বাই ফারজানা" (tiny subtle font size, strictly understated, never competing with or overpowering the headline).`;
+    } else {
+      brandInstruction = `BRANDING:
+Feature the headline "${headline}" with a balanced, modest subtitle "কেক স্লাইস বাই ফারজানা" underneath (kept tasteful, medium-small, and never oversized).`;
+    }
+
+    let sizeInstruction = '';
+    if (currentSize === 'refined') {
+      sizeInstruction = `TYPOGRAPHY SCALE & NEGATIVE SPACE (CRITICAL - DO NOT MAKE TEXT GIGANTIC):
+The headline typography MUST be refined, elegant, and moderate-to-small in scale (occupying only 12-18% of the upper negative space). Do NOT render oversized, gigantic, wall-dominating, or thick lettering. The vast, uncluttered negative breathing space around the typography is the primary hallmark of high-end luxury editorial design.`;
+    } else if (currentSize === 'medium') {
+      sizeInstruction = `TYPOGRAPHY SCALE & NEGATIVE SPACE:
+The typography should have a balanced medium scale (approx 20-25% of the upper negative space) with comfortable breathing room. Avoid oversized lettering.`;
+    } else {
+      sizeInstruction = `TYPOGRAPHY SCALE & NEGATIVE SPACE:
+The typography can be bold and visually prominent in the upper area, while retaining clean margins and breathing room.`;
+    }
+
+    const typoBlock = `BENGALI TYPOGRAPHY TREATMENT:
+In the spacious upper background, render the typography strictly in the ${currentTypoObj.nameEn} style:
+${typoTreatmentDesc}
+Ensure the lettering appears organically integrated into the scene with natural 3D depth and subtle ambient shadows against the wall.
+
+${brandInstruction}
+
+${sizeInstruction}`;
+
+    return `Act as a world-class Art Director for my luxury bakery brand "Cake Slice by Farjana". Refer to the attached raw photo of my cake.
+
+${preservationBlock}
+
+${compositionBlock}
+
+LIGHTING & ATMOSPHERE:
+${lightingDesc}
+
+${typoBlock}
+
+High-end luxury magazine advertising photograph, 8k resolution, photorealistic. --ar ${selectedRatio}`;
+  };
+
   const handleGenerate = () => {
-    const headline = selectedHeadline.trim() || 'প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি';
+    const headline = selectedHeadline.trim() || 'প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি';
 
-    // 1. Image Style setup
-    let baseMaterial = '';
-    let backgroundDesc = '';
-    let lightingDesc = '';
-
-    if (selectedImageStyle === 'dark-cinematic') {
-      baseMaterial = 'a hand-carved dark wood block or rough dark stone base';
-      backgroundDesc = 'completely empty, seamless pitch-dark charcoal negative space';
-      lightingDesc = 'A warm, golden cinematic side-light hits the cake and its complementary base, creating a moody, high-end dramatic atmosphere with rich contrasts and deep shadows.';
-    } else {
-      // organic-earth (Image 2 style)
-      baseMaterial = 'an authentic raw travertine stone slab (natural porous earth stone)';
-      backgroundDesc = 'an empty, seamless warm taupe, sand, or light-beige plaster wall, leaving massive breathing space';
-      lightingDesc = 'Soft, natural diffused ambient lighting gently illuminates the cake and its unique base, casting realistic delicate shadows with grounded earthy calmness.';
-    }
-
-    // 2. Typo Style setup
-    let typoColor = '';
-    let typoTreatment = '';
-    let subtitleText = '';
-
-    if (selectedTypoStyle === 'brush') {
-      typoColor = 'an off-white and light-gold dual-tone with 3D embossed depth';
-      typoTreatment = 'strictly in the Brush Strokes / Artistic Brush Style, showcasing rough, hand-painted artistic brushwork with visible bristle textures, expressive sweep effects, and subtle 3D shading on the strokes.';
-      subtitleText = '~ ARTISANAL LUXURY BAKERY ~';
-    } else if (selectedTypoStyle === 'fluid') {
-      typoColor = 'rich dark-brown and warm bronze/gold liquid tones with natural flow and soft shadow depth';
-      typoTreatment = 'strictly in the Fluid / Liquid style, characterized by smooth, organic, boldly curved shapes with natural flow, dynamic loops, and interconnected letters as if written with thick flowing liquid.';
-      subtitleText = '~ PREMIUM CAKES ~';
-    } else {
-      // handwritten
-      typoColor = 'dark-brown and subtle gold gradients';
-      typoTreatment = 'in an intimate handcrafted calligraphic handwriting style with natural curls, elegant flourishes, whimsical swooshes, and handcrafted dots around the letters.';
-      subtitleText = '~ ARTISANAL CONFECTIONERY ~';
-    }
-
-    // 3. Aspect Ratio string
-    const ratioCode = `--ar ${selectedRatio}`;
-
-    // Assemble final master prompt
-    const prompt = `An editorial, ultra-premium advertising photograph in a ${selectedRatio} aspect ratio, featuring the user's uploaded cake situated strictly in the bottom 25% of the frame. The cake rests on ${baseMaterial}, retaining its authentic original textures, frosting, decorations, and colors in high-fidelity.
-
-The top 75% of the canvas is ${backgroundDesc}. ${lightingDesc}
-
-In the upper spacious background, elegant 3D embossed Bengali typography is prominently featured in ${typoColor}:
-- Main Emotional Headline: "${headline}"
-- Brand Name directly below: "কেক স্লাইস" (Line 1) and "বাই ফারজানা" (Line 2)
-- Typographical Artistic Treatment: ${typoTreatment}
-- Small understated English subtitle at bottom: "${subtitleText}"
-
-The image is clean, highly aesthetic, completely devoid of clutter or random props, strictly holding a luxury magazine cover layout. 8k, photorealistic. ${ratioCode}`;
+    const prompt = buildPrompt(promptMode, headline, brandOption, textSizeOption);
 
     setFinalPrompt(prompt);
     setStep(4);
@@ -131,9 +207,12 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
     // Save to history
     onSavePrompt({
       headline,
-      imageStyle: selectedImageStyle,
+      imageStyle: selectedImageStyle as ImageStyleKey,
       typoStyle: selectedTypoStyle,
+      basePedestal: selectedPedestal,
       ratio: selectedRatio,
+      brandOption,
+      textSizeOption,
       generatedPrompt: prompt,
       createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
@@ -152,147 +231,138 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
-      <div className="w-full max-w-2xl bg-[#121115] border border-[#2D2936] rounded-3xl p-6 sm:p-7 shadow-2xl relative text-zinc-100 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+      <div className="w-full max-w-3xl bg-[#121115] border border-[#2D2936] rounded-3xl p-5 sm:p-7 shadow-2xl relative text-zinc-100 flex flex-col max-h-[94vh]">
         
         {/* Header & Stepper */}
-        <div className="flex items-center justify-between pb-4 border-b border-[#24212C]">
+        <div className="flex items-center justify-between pb-3.5 border-b border-[#24212C]">
           <div>
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#DFBA75] animate-pulse" />
-              <h2 className="text-base sm:text-lg font-serif font-bold text-zinc-100">
-                নতুন ইমেজ প্রম্পট উইজার্ড
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                মাস্টার প্রম্পট উইজার্ড
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono">
+                  ৪-স্টেপ
+                </span>
               </h2>
-              <span className="text-[10px] text-[#DFBA75] bg-[#DFBA75]/10 px-2 py-0.5 rounded-full border border-[#DFBA75]/20 font-mono">
-                ১,০০০+ লাইন লাইব্রেরি
-              </span>
             </div>
-            <p className="text-[11px] text-zinc-400 mt-0.5">
-              Cake Slice by Farjana • ৩টি সহজ ধাপে ৮K মাস্টার প্রম্পট তৈরি করুন
-            </p>
           </div>
-
-          <button
+          <button 
             onClick={resetAndClose}
-            className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Stepper Progress Indicator */}
-        <div className="flex items-center justify-between py-3 px-2 border-b border-[#201D27] text-xs">
-          {[
-            { num: 1, label: '১. বাংলা লাইন' },
-            { num: 2, label: '২. স্টাইল' },
-            { num: 3, label: '৩. সাইজ/রেশিও' },
-            { num: 4, label: '৪. প্রম্পট তৈরি' }
-          ].map((s) => (
-            <div
-              key={s.num}
-              className={`flex items-center gap-1.5 ${
-                step === s.num
-                  ? 'text-[#DFBA75] font-bold'
-                  : step > s.num
-                  ? 'text-emerald-400 font-medium'
-                  : 'text-zinc-500'
-              }`}
-            >
-              <span
-                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
-                  step === s.num
-                    ? 'bg-[#DFBA75] text-black font-bold'
-                    : step > s.num
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                    : 'bg-zinc-800 text-zinc-400'
-                }`}
-              >
-                {step > s.num ? '✓' : s.num}
-              </span>
-              <span className="hidden sm:inline">{s.label}</span>
-            </div>
-          ))}
+        {/* Stepper Indicator */}
+        <div className="grid grid-cols-4 gap-2 pt-3 pb-3 border-b border-[#24212C]/60 text-xs">
+          <div className={`flex items-center gap-1.5 transition-colors ${step === 1 ? 'text-amber-400 font-semibold' : step > 1 ? 'text-emerald-400' : 'text-zinc-500'}`}>
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono ${step === 1 ? 'bg-amber-500 text-black font-bold' : step > 1 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-zinc-800 text-zinc-400'}`}>
+              {step > 1 ? '✓' : '১'}
+            </span>
+            <span className="truncate">১. লাইন</span>
+          </div>
+
+          <div className={`flex items-center gap-1.5 transition-colors ${step === 2 ? 'text-amber-400 font-semibold' : step > 2 ? 'text-emerald-400' : 'text-zinc-500'}`}>
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono ${step === 2 ? 'bg-amber-500 text-black font-bold' : step > 2 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-zinc-800 text-zinc-400'}`}>
+              {step > 2 ? '✓' : '২'}
+            </span>
+            <span className="truncate">২. টাইপো</span>
+          </div>
+
+          <div className={`flex items-center gap-1.5 transition-colors ${step === 3 ? 'text-amber-400 font-semibold' : step > 3 ? 'text-emerald-400' : 'text-zinc-500'}`}>
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono ${step === 3 ? 'bg-amber-500 text-black font-bold' : step > 3 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-zinc-800 text-zinc-400'}`}>
+              {step > 3 ? '✓' : '৩'}
+            </span>
+            <span className="truncate">৩. ক্যানভাস</span>
+          </div>
+
+          <div className={`flex items-center gap-1.5 transition-colors ${step === 4 ? 'text-amber-400 font-semibold' : 'text-zinc-500'}`}>
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono ${step === 4 ? 'bg-amber-500 text-black font-bold' : 'bg-zinc-800 text-zinc-400'}`}>
+              ৪
+            </span>
+            <span className="truncate">৪. প্রম্পট</span>
+          </div>
         </div>
 
-        {/* MODAL BODY (Steps 1, 2, 3, 4) */}
-        <div className="flex-1 overflow-y-auto py-5 space-y-4 pr-1">
+        {/* Modal Body / Steps */}
+        <div className="flex-1 overflow-y-auto py-3.5 custom-scrollbar pr-1">
 
-          {/* ================= STEP 1: SELECT BENGALI HEADLINE (1000+ Unique Database) ================= */}
+          {/* ================= STEP 1: SELECT BENGALI HEADLINE ================= */}
           {step === 1 && (
-            <div className="space-y-3.5 animate-fade-in">
+            <div className="space-y-4 animate-fade-in">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-                    <span>পোস্টারের বাংলা লাইন বেছে নিন</span>
-                    <span className="text-[10px] text-zinc-500 font-normal">
-                      ({filteredHeadlines.length}টি পাওয়া গেছে)
-                    </span>
+                    বাংলা লাইন নির্বাচন
+                    <span className="text-[10px] text-zinc-500 font-mono">({filteredHeadlines.length}টি)</span>
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
-                    গ্রাহকের অনুভূতি ছুঁয়ে যাওয়ার মতো মিষ্টি ও আন্তরিক লাইন
-                  </p>
                 </div>
 
                 <button
                   onClick={handleShuffle}
-                  className="py-1 px-3 bg-[#1D1A25] hover:bg-[#282433] border border-[#DFBA75]/40 text-xs font-semibold text-[#DFBA75] rounded-xl flex items-center gap-1.5 transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1B1922] hover:bg-[#252230] text-amber-300 border border-amber-500/30 rounded-xl text-xs font-medium transition-all active:scale-95 shadow-sm"
+                  title="র‍্যান্ডম লাইন পরিবর্তন"
                 >
                   <Shuffle className="w-3.5 h-3.5" />
-                  <span>🎲 র‍্যান্ডম বদলান</span>
+                  🎲 র‍্যান্ডম
                 </button>
               </div>
 
-              {/* Active Selection Input */}
-              <div className="p-3 rounded-2xl bg-[#0B0A0D] border-2 border-[#DFBA75]/60 flex items-center gap-2.5 shadow-inner">
-                <span className="text-base">✍️</span>
-                <input
-                  type="text"
-                  value={selectedHeadline}
-                  onChange={(e) => setSelectedHeadline(e.target.value)}
-                  placeholder="যেকোনো লাইন সিলেক্ট করুন বা নিজে লিখুন..."
-                  className="w-full bg-transparent text-sm text-[#DFBA75] font-semibold focus:outline-none"
-                />
+              {/* Active Selected Headline Banner (Directly Editable!) */}
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1.5 shadow-inner">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-amber-400/90 flex items-center gap-1.5">
+                    নির্বাচিত লাইন (এডিটেবল)
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono">
+                    {selectedHeadline.split(' ').filter(Boolean).length} শব্দ • ছোট ও মার্জিত
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={selectedHeadline}
+                    onChange={(e) => setSelectedHeadline(e.target.value)}
+                    placeholder="নিজের মতো ছোট বাংলা লাইন লিখুন (যেমন: এক চিলতে মিষ্টি হাসি)..."
+                    className="w-full bg-[#100F15] border border-amber-500/40 focus:border-amber-400 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-bold text-amber-200 placeholder-amber-200/40 focus:outline-none transition-colors"
+                  />
+                </div>
               </div>
 
-              {/* Live Search Bar for 1000+ Lines */}
-              <div className="p-2 rounded-xl bg-[#16141B] border border-zinc-800 flex items-center gap-2">
-                <Search className="w-4 h-4 text-zinc-400 ml-1" />
+              {/* Live Search Bar */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
+                  placeholder="সংক্ষিপ্ত লাইনের মধ্যে সার্চ করুন (যেমন: ভালোবাসা, জন্মদিন, অভিমান, স্বাদ...)"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="১,০০০+ লাইনের মধ্যে সার্চ করুন (যেমন: ভালোবাসা, জন্মদিন, অভিমান, চকলেট, মা, আড্ডা...)"
-                  className="w-full bg-transparent text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none"
+                  className="w-full bg-[#18161E] border border-[#2B2735] focus:border-amber-500/60 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none transition-colors"
                 />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="text-xs text-zinc-400 hover:text-white px-2">
-                    ✕
-                  </button>
-                )}
               </div>
 
-              {/* Category Filter Pills */}
-              <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none">
+              {/* Category Filter Chips */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
                 {[
-                  { id: 'all', label: 'সব (১,০০০+)' },
+                  { id: 'all', label: `সব (${ALL_HEADLINES.length})` },
                   { id: 'love', label: '❤️ প্রিয়জন' },
                   { id: 'birthday', label: '🎂 জন্মদিন' },
                   { id: 'apology', label: '🥺 মান-অভিমান' },
                   { id: 'self', label: '☕ নিজের ট্রিট' },
                   { id: 'taste', label: '✨ খাঁটি স্বাদ' },
-                  { id: 'family', label: '👨‍👩‍👧 পরিবার ও আড্ডা' },
-                  { id: 'anniversary', label: '💍 অ্যানিভার্সারি' }
+                  { id: 'family', label: '👨‍👩‍👧 পরিবার' },
+                  { id: 'anniversary', label: '💍 বিবাহবার্ষিকী' },
+                  { id: 'celebration', label: '🎉 উৎসব ও আড্ডা' }
                 ].map((cat) => (
                   <button
                     key={cat.id}
-                    onClick={() => {
-                      setSelectedCategory(cat.id);
-                      setSearchQuery('');
-                    }}
-                    className={`px-3 py-1 rounded-xl whitespace-nowrap transition-all ${
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`px-2.5 py-1 rounded-xl whitespace-nowrap transition-colors text-xs ${
                       selectedCategory === cat.id
-                        ? 'bg-[#DFBA75] text-black font-bold shadow-md'
-                        : 'bg-[#18161E] text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-amber-500 text-black font-semibold shadow-sm'
+                        : 'bg-[#18161E] text-zinc-400 hover:text-zinc-200 hover:bg-[#201D28]'
                     }`}
                   >
                     {cat.label}
@@ -300,290 +370,554 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
                 ))}
               </div>
 
-              {/* 1000+ Scrollable Lines Container */}
-              <div className="max-h-56 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
-                {filteredHeadlines.slice(0, 150).map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setSelectedHeadline(item.text)}
-                    className={`w-full text-left p-2 rounded-xl text-xs transition-all border flex items-center justify-between ${
-                      selectedHeadline === item.text
-                        ? 'bg-[#DFBA75]/15 border-[#DFBA75] text-[#DFBA75] font-semibold shadow-sm'
-                        : 'bg-[#0E0D11] border-zinc-800/80 text-zinc-300 hover:border-zinc-700 hover:bg-[#15131A]'
-                    }`}
-                  >
-                    <span className="truncate pr-2">“{item.text}”</span>
-                    {selectedHeadline === item.text && (
-                      <Check className="w-4 h-4 text-[#DFBA75] shrink-0" />
-                    )}
-                  </button>
-                ))}
-                {filteredHeadlines.length > 150 && (
-                  <div className="p-2 text-center text-[11px] text-zinc-500">
-                    আরও {filteredHeadlines.length - 150}টি লাইন রয়েছে (নির্দিষ্ট শব্দ লিখে সার্চ করুন)
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ================= STEP 2: SELECT IMAGE & TYPO STYLE ================= */}
-          {step === 2 && (
-            <div className="space-y-5 animate-fade-in">
-              <div>
-                <h3 className="text-sm font-semibold text-zinc-100">
-                  ইমেজ স্টাইল ও বাংলা টাইপোগ্রাফির ধরন বেছে নিন
-                </h3>
-                <p className="text-[11px] text-zinc-400">
-                  আপনার কেকের কালার ও ফিনিশিংয়ের সাথে মানানসই স্টাইল সিলেক্ট করুন
-                </p>
-              </div>
-
-              {/* Image & Lighting Style Selection */}
-              <div>
-                <label className="text-xs font-semibold text-[#DFBA75] block mb-2 uppercase tracking-wider">
-                  ১. ব্যাকগ্রাউন্ড ও লাইটিং স্টাইল
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Organic Earth Tone */}
-                  <button
-                    onClick={() => {
-                      setSelectedImageStyle('organic-earth');
-                      setSelectedTypoStyle('fluid');
-                    }}
-                    className={`p-3 rounded-2xl border text-left transition-all relative group ${
-                      selectedImageStyle === 'organic-earth'
-                        ? 'border-[#DFBA75] bg-[#1E1A26] shadow-[0_0_20px_rgba(223,186,117,0.2)]'
-                        : 'border-[#26242B] bg-[#0E0D10] opacity-80 hover:opacity-100 hover:border-zinc-700'
-                    }`}
-                  >
-                    <div className="w-full aspect-[4/5] rounded-xl overflow-hidden mb-2 relative border border-[#DFBA75]/20 shadow-md">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="/preview-earth-tone.jpg"
-                        alt="Organic Earth Tone"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <span className="absolute bottom-1.5 left-1.5 bg-black/75 backdrop-blur-sm text-[9px] text-[#DFBA75] font-semibold px-2 py-0.5 rounded-md">
-                        ২নং ছবির আসল লুক
-                      </span>
-                    </div>
-                    <div className="text-xs font-bold text-zinc-100">Organic Earth Tone</div>
-                    <div className="text-[10px] text-zinc-400 mt-0.5">ট্রাভার্টিন মার্বেল স্ল্যাব ও ওয়ার্ম বেইজ দেয়াল</div>
-                    {selectedImageStyle === 'organic-earth' && (
-                      <div className="absolute right-3 top-3 w-3 h-3 rounded-full bg-[#DFBA75] shadow-[0_0_8px_#DFBA75]" />
-                    )}
-                  </button>
-
-                  {/* Dark & Warm Cinematic */}
-                  <button
-                    onClick={() => {
-                      setSelectedImageStyle('dark-cinematic');
-                      setSelectedTypoStyle('brush');
-                    }}
-                    className={`p-3 rounded-2xl border text-left transition-all relative group ${
-                      selectedImageStyle === 'dark-cinematic'
-                        ? 'border-[#DFBA75] bg-[#1E1A26] shadow-[0_0_20px_rgba(223,186,117,0.2)]'
-                        : 'border-[#26242B] bg-[#0E0D10] opacity-80 hover:opacity-100 hover:border-zinc-700'
-                    }`}
-                  >
-                    <div className="w-full aspect-[4/5] rounded-xl overflow-hidden mb-2 relative border border-[#DFBA75]/20 shadow-md">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="/preview-dark-cinematic.jpg"
-                        alt="Dark Cinematic"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <span className="absolute bottom-1.5 left-1.5 bg-black/75 backdrop-blur-sm text-[9px] text-[#DFBA75] font-semibold px-2 py-0.5 rounded-md">
-                        ডার্ক ও গোল্ড লুক
-                      </span>
-                    </div>
-                    <div className="text-xs font-bold text-zinc-100">Dark & Warm Cinematic</div>
-                    <div className="text-[10px] text-zinc-400 mt-0.5">কালো চারকোল ব্যাকগ্রাউন্ড ও ড্রামাটিক আলো</div>
-                    {selectedImageStyle === 'dark-cinematic' && (
-                      <div className="absolute right-3 top-3 w-3 h-3 rounded-full bg-[#DFBA75] shadow-[0_0_8px_#DFBA75]" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Typo Style Selection */}
-              <div>
-                <label className="text-xs font-semibold text-[#DFBA75] block mb-2 uppercase tracking-wider">
-                  ২. বাংলা টাইপোগ্রাফির শৈল্পিক ধরন
-                </label>
-                <div className="grid grid-cols-3 gap-2.5">
-                  {[
-                    { id: 'fluid', title: 'Fluid / Liquid', desc: 'চকলেট ও সোনালি তরল কার্ভ (২নং ছবির মতো)' },
-                    { id: 'brush', title: 'Artistic Brush', desc: 'তুলির সোনালি-সাদা ৩ডি টান' },
-                    { id: 'handwritten', title: 'Handwritten', desc: 'হাতে আঁকা ক্যালিগ্রাফি সিগনেচার' },
-                  ].map((t) => (
+              {/* Headlines Compact 2-Column Grid */}
+              <div className="max-h-[300px] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1.5 pr-1 custom-scrollbar">
+                {filteredHeadlines.map((item, idx) => {
+                  const isSelected = selectedHeadline.trim() === item.text.trim();
+                  return (
                     <button
-                      key={t.id}
-                      onClick={() => setSelectedTypoStyle(t.id as TypoStyleKey)}
-                      className={`p-2.5 rounded-xl border text-left transition-all ${
-                        selectedTypoStyle === t.id
-                          ? 'border-[#DFBA75] bg-[#1E1A26] text-[#DFBA75]'
-                          : 'border-[#26242B] bg-[#0E0D10] text-zinc-400 hover:border-zinc-700'
+                      key={idx}
+                      type="button"
+                      onClick={() => setSelectedHeadline(item.text)}
+                      className={`text-left px-3 py-2 rounded-xl text-xs transition-all flex items-center justify-between group ${
+                        isSelected
+                          ? 'bg-amber-500/20 border border-amber-500/60 text-amber-200 font-semibold shadow-sm'
+                          : 'bg-[#15131A] hover:bg-[#1D1A25] border border-[#262330] text-zinc-300'
                       }`}
                     >
-                      <div className="text-xs font-bold text-zinc-100">{t.title}</div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">{t.desc}</div>
+                      <span className="truncate pr-1.5">“{item.text}”</span>
+                      {isSelected ? (
+                        <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      ) : (
+                        <span className="text-[10px] text-zinc-600 group-hover:text-zinc-400 font-mono shrink-0">
+                          বাছাই
+                        </span>
+                      )}
                     </button>
-                  ))}
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ================= STEP 2: SELECT TYPOGRAPHY STYLE (REAL PREVIEWS!) ================= */}
+          {step === 2 && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                    টাইপোগ্রাফি স্টাইল
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono">
+                      ১৫টি স্টাইল
+                    </span>
+                  </h3>
+                </div>
+
+                {/* Filter Tabs */}
+                <div className="flex items-center gap-1 bg-[#18161E] p-1 rounded-xl border border-[#2B2735] text-xs self-start sm:self-auto">
+                  <button
+                    onClick={() => setTypoFilter('locked')}
+                    className={`px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5 ${
+                      typoFilter === 'locked'
+                        ? 'bg-amber-500 text-black font-semibold shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <Star className="w-3.5 h-3.5 fill-current" />
+                    লকড (৩)
+                  </button>
+                  <button
+                    onClick={() => setTypoFilter('all')}
+                    className={`px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5 ${
+                      typoFilter === 'all'
+                        ? 'bg-amber-500 text-black font-semibold shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    সব ({TYPOGRAPHY_STYLES.length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Selection Summary Banner */}
+              <div className="p-3 rounded-2xl bg-[#17151E] border border-amber-500/30 flex items-center gap-3">
+                <img 
+                  src={currentTypoObj.previewImg} 
+                  alt={currentTypoObj.nameBn} 
+                  className="w-16 h-12 rounded-lg object-cover border border-amber-500/40 shrink-0 bg-black/40"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-amber-200 truncate">{currentTypoObj.nameBn}</span>
+                    {currentTypoObj.badge && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
+                        {currentTypoObj.badge}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-zinc-400 truncate mt-0.5">{currentTypoObj.description}</p>
+                </div>
+              </div>
+
+              {/* Typography Preview Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
+                {filteredTypoStyles.map((item) => {
+                  const isSelected = selectedTypoStyle === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setSelectedTypoStyle(item.id)}
+                      className={`relative flex flex-col rounded-2xl overflow-hidden text-left transition-all p-3 border group ${
+                        isSelected
+                          ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/30 shadow-lg'
+                          : 'bg-[#15131A] hover:bg-[#1D1A25] border-[#2B2735] text-zinc-300'
+                      }`}
+                    >
+                      {item.badge && (
+                        <div className="absolute top-2 right-2 z-10">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                            item.isLocked 
+                              ? 'bg-amber-500 text-black font-bold shadow-md'
+                              : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                          }`}>
+                            {item.badge}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="w-full h-24 rounded-xl overflow-hidden bg-black/60 border border-white/5 mb-2.5 relative flex items-center justify-center">
+                        <img 
+                          src={item.previewImg} 
+                          alt={item.nameBn}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                        <span className="absolute bottom-1.5 left-2 text-[10px] font-mono text-zinc-300 font-medium">
+                          {item.nameEn}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <h4 className={`text-xs font-bold ${isSelected ? 'text-amber-200' : 'text-zinc-200'}`}>
+                          {item.nameBn}
+                        </h4>
+                        {isSelected && <Check className="w-4 h-4 text-amber-400 shrink-0" />}
+                      </div>
+                      <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-relaxed">
+                        {item.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Typography Scale & Brand Name Settings */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-[#23202B]">
+                {/* Brand Name Option */}
+                <div className="p-3 rounded-2xl bg-[#141219] border border-[#2B2735] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-amber-400" />
+                      ব্র্যান্ড নাম (&quot;কেক স্লাইস বাই ফারজানা&quot;)
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 font-mono">
+                      {brandOption === 'none' ? 'বাদ দেওয়া' : brandOption === 'subtle' ? 'ছোট সিগনেচার' : 'পূর্ণ'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setBrandOption('none')}
+                      className={`py-2 px-1.5 rounded-xl text-[11px] font-medium border text-center transition-all ${
+                        brandOption === 'none'
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold shadow-sm'
+                          : 'bg-[#1A1822] border-transparent text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      🚫 বাদ দিন (সেরা)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBrandOption('subtle')}
+                      className={`py-2 px-1.5 rounded-xl text-[11px] font-medium border text-center transition-all ${
+                        brandOption === 'subtle'
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold shadow-sm'
+                          : 'bg-[#1A1822] border-transparent text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      🪶 ছোট সিগনেচার
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBrandOption('full')}
+                      className={`py-2 px-1.5 rounded-xl text-[11px] font-medium border text-center transition-all ${
+                        brandOption === 'full'
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold shadow-sm'
+                          : 'bg-[#1A1822] border-transparent text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      🏷️ পূর্ণ নাম
+                    </button>
+                  </div>
+
+                </div>
+
+                {/* Text Size / Negative Space Option */}
+                <div className="p-3 rounded-2xl bg-[#141219] border border-[#2B2735] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      লেখার সাইজ ও নেগেটিভ স্পেস
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 font-mono">
+                      {textSizeOption === 'refined' ? 'পরিমিত (১৫-১৮%)' : textSizeOption === 'medium' ? 'মাঝারি' : 'বোল্ড'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setTextSizeOption('refined')}
+                      className={`py-2 px-1.5 rounded-xl text-[11px] font-medium border text-center transition-all ${
+                        textSizeOption === 'refined'
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold shadow-sm'
+                          : 'bg-[#1A1822] border-transparent text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      ✨ মার্জিত ও ছোট
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTextSizeOption('medium')}
+                      className={`py-2 px-1.5 rounded-xl text-[11px] font-medium border text-center transition-all ${
+                        textSizeOption === 'medium'
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold shadow-sm'
+                          : 'bg-[#1A1822] border-transparent text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      ⚖️ মাঝারি
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTextSizeOption('large')}
+                      className={`py-2 px-1.5 rounded-xl text-[11px] font-medium border text-center transition-all ${
+                        textSizeOption === 'large'
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold shadow-sm'
+                          : 'bg-[#1A1822] border-transparent text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      📢 বড় ও বোল্ড
+                    </button>
+                  </div>
+
                 </div>
               </div>
             </div>
           )}
 
-          {/* ================= STEP 3: SELECT ASPECT RATIO ================= */}
+          {/* ================= STEP 3: SELECT BACKGROUND, PEDESTAL & RATIO ================= */}
           {step === 3 && (
-            <div className="space-y-5 animate-fade-in">
+            <div className="space-y-6 animate-fade-in">
+              
+              {/* Section 1: Background & Lighting (10 Real Generated Styles!) */}
               <div>
-                <h3 className="text-sm font-semibold text-zinc-100">
-                  ছবির সাইজ / রেশিও বেছে নিন
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-amber-400" />
+                      ১. ব্যাকগ্রাউন্ড ও লাইটিং
+                    </h3>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono">
+                    ১০টি শৈলী
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                  {BACKGROUND_STYLES.map((bg) => {
+                    const isSelected = selectedImageStyle === bg.id;
+                    return (
+                      <button
+                        key={bg.id}
+                        onClick={() => setSelectedImageStyle(bg.id)}
+                        className={`relative p-3 rounded-2xl border text-left transition-all flex items-start gap-3 group ${
+                          isSelected
+                            ? 'bg-amber-500/15 border-amber-500 ring-2 ring-amber-500/30 shadow-lg'
+                            : 'bg-[#15131A] hover:bg-[#1D1A25] border-[#2B2735]'
+                        }`}
+                      >
+                        {/* Real Image Preview */}
+                        <div className="w-20 h-24 rounded-xl overflow-hidden shrink-0 border border-white/10 relative bg-black/60">
+                          <img 
+                            src={bg.previewImg} 
+                            alt={bg.nameBn} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                        </div>
+
+                        {/* Details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-1">
+                            <h4 className="text-xs font-bold text-amber-300 truncate">{bg.nameBn}</h4>
+                            {isSelected && <Check className="w-4 h-4 text-amber-400 shrink-0" />}
+                          </div>
+
+                          {bg.badge && (
+                            <span className="inline-block mt-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700 font-mono">
+                              {bg.badge}
+                            </span>
+                          )}
+
+                          <p className="text-[11px] text-zinc-300 font-medium mt-1 line-clamp-1">{bg.shortDesc}</p>
+                          <p className="text-[10px] text-zinc-400 mt-0.5 line-clamp-2 leading-relaxed">
+                            {bg.fullDescBn}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section 2: Pedestal Selection with REAL PREVIEWS! */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-amber-400" />
+                      ২. পেডেস্টাল বেস
+                    </h3>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono">
+                    ৭টি বেস
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                  {PEDESTAL_OPTIONS.map((ped) => {
+                    const isSelected = selectedPedestal === ped.id;
+                    return (
+                      <button
+                        key={ped.id}
+                        onClick={() => setSelectedPedestal(ped.id as BasePedestalKey)}
+                        className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between group relative overflow-hidden ${
+                          isSelected
+                            ? 'bg-amber-500/15 border-amber-500 ring-2 ring-amber-500/30 text-amber-200 shadow-md'
+                            : 'bg-[#15131A] hover:bg-[#1D1A25] border-[#2B2735] text-zinc-300'
+                        }`}
+                      >
+                        {/* Real Base Preview Image */}
+                        <div className="w-full h-20 rounded-xl overflow-hidden mb-2 bg-black/60 border border-white/5 relative">
+                          <img 
+                            src={ped.previewImg} 
+                            alt={ped.nameBn} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute top-1 left-1.5 text-xs bg-black/60 px-1.5 py-0.5 rounded-md backdrop-blur-sm">
+                            {ped.icon}
+                          </div>
+                          {isSelected && (
+                            <div className="absolute top-1 right-1.5 bg-amber-500 text-black p-0.5 rounded-full">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="text-[11px] font-bold leading-tight truncate">{ped.nameBn}</div>
+                          <div className="text-[9px] text-zinc-400 truncate mt-0.5">{ped.nameEn}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section 3: Ratio Selection */}
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-100 mb-1 flex items-center gap-2">
+                  <RatioIcon className="w-4 h-4 text-amber-400" />
+                  ৩. অ্যাসপেক্ট রেশিও
                 </h3>
-                <p className="text-[11px] text-zinc-400">
-                  সোশ্যাল মিডিয়ায় আপনি কোন ফরম্যাটে পোস্ট করতে চান
-                </p>
+
+                <div className="grid grid-cols-3 gap-2.5">
+                  {[
+                    { id: '4:5', label: '৪:৫ পোর্ট্রেট', sub: 'ইনস্টাগ্রাম/ম্যাগাজিন (লকড রিকমেন্ডেড)' },
+                    { id: '9:16', label: '৯:১৬ ভার্টিক্যাল', sub: 'স্টোরি, রিল ও শর্টস' },
+                    { id: '1:1', label: '১:১ স্কয়ার', sub: 'ফেসবুক স্কয়ার পোস্ট' }
+                  ].map((r) => {
+                    const isSelected = selectedRatio === r.id;
+                    return (
+                      <button
+                        key={r.id}
+                        onClick={() => setSelectedRatio(r.id as AspectRatioKey)}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          isSelected
+                            ? 'bg-amber-500/15 border-amber-500 text-amber-200 font-bold'
+                            : 'bg-[#15131A] hover:bg-[#1D1A25] border-[#2B2735] text-zinc-400'
+                        }`}
+                      >
+                        <div className="text-xs">{r.label}</div>
+                        <div className="text-[9px] text-zinc-500 mt-0.5">{r.sub}</div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  {
-                    id: '4:5',
-                    title: '4:5 Editorial Portrait',
-                    desc: 'Instagram ও Facebook ফিডের জন্য আদর্শ (ম্যাগাজিন কভার স্টাইল)',
-                    badge: 'Recommended'
-                  },
-                  {
-                    id: '9:16',
-                    title: '9:16 Full Screen',
-                    desc: 'Instagram Stories, Reels কভার এবং TikTok-এর জন্য ফুল স্ক্রিন',
-                    badge: 'Story / Reel'
-                  },
-                  {
-                    id: '1:1',
-                    title: '1:1 Square Feed',
-                    desc: 'ক্লাসিক স্কয়ার সাইজ পোস্ট',
-                    badge: 'Square'
-                  }
-                ].map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => setSelectedRatio(r.id as AspectRatioKey)}
-                    className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between ${
-                      selectedRatio === r.id
-                        ? 'border-[#DFBA75] bg-[#1E1A26] shadow-[0_0_20px_rgba(223,186,117,0.2)]'
-                        : 'border-[#26242B] bg-[#0E0D10] opacity-80 hover:opacity-100 hover:border-zinc-700'
-                    }`}
-                  >
-                    <div>
-                      <span className="text-[10px] font-bold uppercase text-[#DFBA75] bg-[#DFBA75]/10 px-2 py-0.5 rounded-full border border-[#DFBA75]/20">
-                        {r.badge}
-                      </span>
-                      <div className="text-base font-bold text-zinc-100 mt-2">{r.id}</div>
-                      <div className="text-xs font-semibold text-zinc-200 mt-0.5">{r.title}</div>
-                      <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">{r.desc}</p>
-                    </div>
-
-                    {selectedRatio === r.id && (
-                      <div className="mt-3 flex items-center gap-1.5 text-xs text-[#DFBA75] font-semibold">
-                        <CheckCircle2 className="w-4 h-4" /> নির্বাচিত
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 
-          {/* ================= STEP 4: FINAL GENERATED PROMPT ================= */}
+          {/* ================= STEP 4: RESULT & LAUNCH TO GEMINI ================= */}
           {step === 4 && (
             <div className="space-y-4 animate-fade-in">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold text-emerald-400 flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-emerald-400 flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" />
-                    আপনার মাস্টার প্রম্পট তৈরি হয়ে গেছে!
+                    ৮K মাস্টার প্রম্পট প্রস্তুত
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
-                    নিচের বাটনটি চাপলেই প্রম্পট কপি হয়ে Gemini Pro খুলে যাবে
-                  </p>
                 </div>
 
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(finalPrompt);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  }}
-                  className="py-1.5 px-3 bg-[#1F1B26] hover:bg-[#2A2434] border border-[#DFBA75]/40 text-xs font-semibold text-[#DFBA75] rounded-xl flex items-center gap-1.5"
+                  onClick={handleCopyAndOpenGemini}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copied ? 'কপি হয়েছে!' : 'প্রম্পট কপি করুন'}</span>
+                  {copied ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      কপি হয়েছে!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      কপি ও জেমিনি খুলুন 🚀
+                    </>
+                  )}
                 </button>
               </div>
 
-              {/* Master Prompt Codebox */}
-              <div className="p-4 rounded-2xl bg-[#08070A] border border-[#26242B] font-mono text-xs text-zinc-200 leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap selection:bg-[#DFBA75] selection:text-black">
-                {finalPrompt}
+              {/* Selection Summary Pill with Previews */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="p-2.5 rounded-xl bg-[#17151E] border border-[#2B2735] flex items-center gap-2">
+                  <img src={currentTypoObj.previewImg} alt={currentTypoObj.nameBn} className="w-8 h-8 rounded-lg object-cover shrink-0 border border-amber-500/30" />
+                  <div className="min-w-0">
+                    <span className="text-[9px] uppercase font-mono text-zinc-500 block">টাইপো স্টাইল</span>
+                    <span className="font-semibold text-amber-300 truncate block">{currentTypoObj.nameBn}</span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-[#17151E] border border-[#2B2735] flex items-center gap-2">
+                  <img src={currentBgObj.previewImg} alt={currentBgObj.nameBn} className="w-8 h-8 rounded-lg object-cover shrink-0 border border-amber-500/30" />
+                  <div className="min-w-0">
+                    <span className="text-[9px] uppercase font-mono text-zinc-500 block">ক্যানভাস লাইটিং</span>
+                    <span className="font-semibold text-zinc-200 truncate block">{currentBgObj.nameBn}</span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-[#17151E] border border-[#2B2735] flex items-center gap-2">
+                  <img src={currentPedestalObj.previewImg} alt={currentPedestalObj.nameBn} className="w-8 h-8 rounded-lg object-cover shrink-0 border border-amber-500/30" />
+                  <div className="min-w-0">
+                    <span className="text-[9px] uppercase font-mono text-zinc-500 block">পেডেস্টাল</span>
+                    <span className="font-semibold text-zinc-200 truncate block">{currentPedestalObj.nameBn}</span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-[#17151E] border border-[#2B2735] flex flex-col justify-center">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] uppercase font-mono text-zinc-500 block">রেশিও</span>
+                    <span className="text-[9px] text-zinc-400">{brandOption === 'none' ? 'ব্র্যান্ড ছাড়া' : 'ব্র্যান্ড সহ'}</span>
+                  </div>
+                  <span className="font-semibold text-amber-400 block">{selectedRatio} • {textSizeOption === 'refined' ? 'পরিমিত সাইজ' : textSizeOption === 'medium' ? 'মাঝারি' : 'বোল্ড'}</span>
+                </div>
               </div>
 
-              {/* Main Action to Gemini */}
-              <button
-                onClick={handleCopyAndOpenGemini}
-                className="w-full py-4 px-6 rounded-2xl font-bold text-sm bg-gradient-to-r from-[#DFBA75] via-[#F4D998] to-[#C99C47] text-black hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl flex items-center justify-center gap-2"
-              >
-                <Sparkles className="w-5 h-5 text-black" />
-                <span>প্রম্পট কপি করে Gemini Pro-তে যান (২নং ছবির মতো তৈরি করুন)</span>
-                <ExternalLink className="w-4 h-4 ml-1" />
-              </button>
+              {/* Prompt Mode Toggle */}
+              <div className="flex items-center gap-2 p-1 bg-[#0D0C10] border border-[#2D2936] rounded-xl">
+                <button
+                  onClick={() => { setPromptMode('full'); const h = selectedHeadline.trim() || 'প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি'; setFinalPrompt(buildPrompt('full', h)); }}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${promptMode === 'full' ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  ✍️ টাইপোগ্রাফি সহ (সম্পূর্ণ)
+                </button>
+                <button
+                  onClick={() => { setPromptMode('composition'); const h = selectedHeadline.trim() || 'প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি'; setFinalPrompt(buildPrompt('composition', h)); }}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${promptMode === 'composition' ? 'bg-emerald-500 text-black' : 'text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  🎨 শুধু কম্পোজিশন (রিকমেন্ডেড)
+                </button>
+              </div>
 
-              <p className="text-[11px] text-zinc-400 text-center leading-relaxed">
-                💡 <strong>ব্যবহারের নিয়ম:</strong> এই বাটনে চাপ দিলে আপনার প্রম্পট কপি হয়ে সরাসরি Gemini খুলবে। সেখানে আপনার কেকের ছবি ড্রপ করে <strong>Paste</strong> চাপুন—আর পেয়ে যান ২নং ছবির মতো অবিকল লাক্সারি মাস্টারপিস!
-              </p>
+              {/* Prompt Output Code Box */}
+              <div className="relative">
+                <textarea
+                  readOnly
+                  value={finalPrompt}
+                  className="w-full h-56 p-3.5 bg-[#0D0C10] border border-[#2D2936] rounded-2xl text-xs sm:text-sm text-zinc-300 font-mono focus:outline-none custom-scrollbar resize-none leading-relaxed"
+                />
+              </div>
+
+              {/* Quick Helper Note */}
+              <div className="py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200 flex items-center justify-between">
+                <span>💡 Gemini ওপেন করে আপনার আসল কেকের ছবি আপলোড করুন এবং প্রম্পটটি পেস্ট করুন।</span>
+                <span className="text-[10px] text-amber-400/80 font-mono">Image-to-Image 8K</span>
+              </div>
             </div>
           )}
 
         </div>
 
-        {/* MODAL FOOTER BUTTONS */}
-        <div className="pt-4 border-t border-[#24212C] flex items-center justify-between">
-          {step > 1 && step < 4 ? (
+        {/* Modal Footer Controls */}
+        <div className="pt-3 border-t border-[#24212C] flex items-center justify-between">
+          {step > 1 ? (
             <button
-              onClick={() => setStep((prev) => (prev - 1) as 1 | 2 | 3)}
-              className="py-2.5 px-4 rounded-xl border border-zinc-700 bg-[#16141A] text-zinc-300 text-xs font-semibold flex items-center gap-1.5 hover:bg-zinc-800 transition-all"
+              onClick={() => setStep((prev) => (prev - 1) as 1 | 2 | 3 | 4)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-[#1B1922] hover:bg-[#252230] text-zinc-300 rounded-xl text-xs font-medium transition-colors"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>পূর্ববর্তী ধাপ</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              পূর্ববর্তী ধাপ
             </button>
           ) : (
             <div />
           )}
 
-          {step < 3 ? (
+          {step === 1 && (
             <button
-              onClick={() => setStep((prev) => (prev + 1) as 2 | 3)}
-              className="py-2.5 px-5 rounded-xl bg-[#DFBA75] hover:bg-[#E8C885] text-black text-xs font-bold flex items-center gap-1.5 transition-all shadow-lg ml-auto"
+              onClick={() => setStep(2)}
+              className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-all ml-auto"
             >
-              <span>পরবর্তী ধাপ</span>
+              পরবর্তী ধাপ: টাইপো স্টাইল
               <ArrowRight className="w-4 h-4" />
             </button>
-          ) : step === 3 ? (
+          )}
+
+          {step === 2 && (
+            <button
+              onClick={() => setStep(3)}
+              className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-all ml-auto"
+            >
+              পরবর্তী ধাপ: বেস ও রেশিও
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
+
+          {step === 3 && (
             <button
               onClick={handleGenerate}
-              className="py-2.5 px-6 rounded-xl bg-gradient-to-r from-[#DFBA75] to-[#B89243] text-black text-xs font-bold flex items-center gap-2 transition-all shadow-lg ml-auto hover:scale-[1.02]"
+              className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-all ml-auto"
             >
+              ৮K প্রম্পট তৈরি করুন
               <Sparkles className="w-4 h-4" />
-              <span>প্রম্পট তৈরি করুন</span>
             </button>
-          ) : (
+          )}
+
+          {step === 4 && (
             <button
-              onClick={resetAndClose}
-              className="py-2.5 px-5 rounded-xl border border-zinc-700 bg-[#16141A] text-zinc-300 text-xs font-semibold hover:bg-zinc-800 transition-all ml-auto"
+              onClick={() => setStep(1)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-[#1B1922] hover:bg-[#252230] text-zinc-300 rounded-xl text-xs font-medium transition-colors ml-auto"
             >
-              সম্পন্ন / বন্ধ করুন
+              নতুন প্রম্পট তৈরি করুন 🔄
             </button>
           )}
         </div>
