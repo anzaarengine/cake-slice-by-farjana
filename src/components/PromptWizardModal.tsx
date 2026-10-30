@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   X, 
   ArrowRight, 
@@ -10,67 +10,19 @@ import {
   Copy, 
   ExternalLink, 
   Shuffle, 
-  Layers, 
-  Crop,
-  CheckCircle2
+  Search,
+  CheckCircle2,
+  Database
 } from 'lucide-react';
 import { ImageStyleKey, TypoStyleKey, AspectRatioKey, PromptConfig } from '@/types';
+import headlinesData from '@/data/headlines.json';
 
-// Curated Categorized Heartfelt Bengali Lines
-const HEADLINE_VAULT = [
-  // ১. প্রিয়জন ও ভালোবাসা (Loved Ones)
-  { text: 'প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি', cat: 'love' },
-  { text: 'তুমি পাশে আছো বলেই দিনটা এত সুন্দর', cat: 'love' },
-  { text: 'ভালোবাসার কথাগুলো একটু মিষ্টিমুখেই হোক', cat: 'love' },
-  { text: 'তোমার জন্য একটু বাড়তি ভালোবাসা দিয়ে বেক করা', cat: 'love' },
-  { text: 'একটুখানি ভালোবাসা, এক টুকরো কেক', cat: 'love' },
-  { text: 'খুশির উপলক্ষ তোমায় ঘিরেই', cat: 'love' },
-  { text: 'ভালোবাসা প্রকাশের সবচেয়ে মিষ্টি উপায়', cat: 'love' },
-  { text: 'তোমাকে স্পেশাল ফিল করাতে এই ছোট্ট চেষ্টা', cat: 'love' },
-  { text: 'মনের মানুষটার পছন্দের সেরা স্বাদ', cat: 'love' },
+interface HeadlineItem {
+  text: string;
+  cat: string;
+}
 
-  // ২. জন্মদিন ও বড় দিন (Birthdays & Celebrations)
-  { text: 'আরও একটা বছর সুন্দর স্মৃতি হয়ে থাকুক', cat: 'birthday' },
-  { text: 'জন্মদিনের সেরা মুহূর্তটা মিষ্টিমুখেই হোক', cat: 'birthday' },
-  { text: 'হাসি-খুশির দিনগুলোতে মিষ্টি ছোঁয়া', cat: 'birthday' },
-  { text: 'আজকের দিনটা শুধুই তোমার উদযাপনের', cat: 'birthday' },
-  { text: 'বছরের সবচেয়ে স্পেশাল দিনটার জন্য', cat: 'birthday' },
-  { text: 'জীবনের নতুন বছরে অনেক অনেক মিষ্টি শুভেচ্ছা', cat: 'birthday' },
-  { text: 'উদযাপন হোক মনের মতো', cat: 'birthday' },
-  { text: 'স্মৃতিরা মিষ্টি হয়ে জমুক মনে', cat: 'birthday' },
-
-  // ৩. মান-অভিমান ও মিষ্টি আবদার (Apology & Patch-up)
-  { text: 'একটু মিষ্টি মুখে সব রাগ ভুলে যাই, চলো?', cat: 'apology' },
-  { text: 'রাগ ভাঙাতে এক টুকরো ভালোবাসা', cat: 'apology' },
-  { text: 'অভিমান ভুলে দিনটা মিষ্টি হোক', cat: 'apology' },
-  { text: 'একটু মিষ্টি হাসি দেখতেই তো এত আয়োজন!', cat: 'apology' },
-  { text: 'ছোট্ট ভুলে মন খারাপ? মিষ্টি খেয়ে মন ভালো করো', cat: 'apology' },
-  { text: 'চলো, সব মান-অভিমান আজ মিষ্টিমুখেই শেষ হোক', cat: 'apology' },
-  { text: 'তোমার এক টুকরো মিষ্টি হাসির জন্য', cat: 'apology' },
-
-  // ৪. নিজের জন্য ও একটু স্বস্তি (Self-Care & Craving)
-  { text: 'সারা দিনের ক্লান্তি শেষে নিজের জন্য একটু মিষ্টি সময়', cat: 'self' },
-  { text: 'আজ মন ভালো করার দায়িত্বটা আমাদের', cat: 'self' },
-  { text: 'আজকের দিনটা একটু স্পেশাল হোক না!', cat: 'self' },
-  { text: 'একটুখানি মিষ্টি সুখ, শুধুই নিজের জন্য', cat: 'self' },
-  { text: 'এক টুকরো কেক আর এক কাপ চা—দিনটা তো সুন্দর!', cat: 'self' },
-  { text: 'কখনো কখনো নিজের জন্যও একটু মিষ্টি উপহার লাগে', cat: 'self' },
-  { text: 'দিনের সেরা মুহূর্ত—নিজের পছন্দের এক স্লাইস', cat: 'self' },
-
-  // ৫. খাঁটি স্বাদ ও ঘরোয়া যত্ন (Taste & Homemade Care)
-  { text: 'অতিরিক্ত মিষ্টি নয়, মুখে লেগে থাকার মতো স্বাদ', cat: 'taste' },
-  { text: 'ঘরের মানুষের জন্য যেভাবে বানাই, ঠিক ততখানি যত্ন', cat: 'taste' },
-  { text: 'মুখে দিলেই একদম মিলিয়ে যায়', cat: 'taste' },
-  { text: 'এক স্লাইস খাওয়ার পর মনটা ভরে যাবে', cat: 'taste' },
-  { text: 'খাঁটি বাটার আর সেরা চকলেটের নিখুঁত মেলবন্ধন', cat: 'taste' },
-  { text: 'অর্ডারের পর তাজা বেক করা পরম যত্ন', cat: 'taste' },
-
-  // ৬. আড্ডা, চা ও পরিবার (Family & Adda)
-  { text: 'বিকেলের চায়ের সাথে মিষ্টি এক টুকরো আড্ডা', cat: 'family' },
-  { text: 'পরিবারের সবাইকে নিয়ে একটু মিষ্টি আনন্দ', cat: 'family' },
-  { text: 'আড্ডা জমুক মিষ্টি স্বাদে', cat: 'family' },
-  { text: 'একসাথে থাকার আনন্দগুলো মিষ্টি হোক', cat: 'family' }
-];
+const ALL_HEADLINES: HeadlineItem[] = headlinesData as HeadlineItem[];
 
 interface PromptWizardModalProps {
   isOpen: boolean;
@@ -89,6 +41,8 @@ export const PromptWizardModal: React.FC<PromptWizardModalProps> = ({
   // Selections
   const [selectedHeadline, setSelectedHeadline] = useState<string>('প্রিয় মানুষটার মুখে এক চিলতে মিষ্টি হাসি');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  
   const [selectedImageStyle, setSelectedImageStyle] = useState<ImageStyleKey>('organic-earth');
   const [selectedTypoStyle, setSelectedTypoStyle] = useState<TypoStyleKey>('fluid');
   const [selectedRatio, setSelectedRatio] = useState<AspectRatioKey>('4:5');
@@ -97,18 +51,20 @@ export const PromptWizardModal: React.FC<PromptWizardModalProps> = ({
   const [finalPrompt, setFinalPrompt] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
-  if (!isOpen) return null;
+  // Filter headlines by category & search query
+  const filteredHeadlines = useMemo(() => {
+    return ALL_HEADLINES.filter((item) => {
+      const matchesCat = selectedCategory === 'all' || item.cat === selectedCategory;
+      const matchesSearch = !searchQuery.trim() || item.text.toLowerCase().includes(searchQuery.trim().toLowerCase());
+      return matchesCat && matchesSearch;
+    });
+  }, [selectedCategory, searchQuery]);
 
-  // Filter headlines
-  const filteredHeadlines = selectedCategory === 'all'
-    ? HEADLINE_VAULT
-    : HEADLINE_VAULT.filter(i => i.cat === selectedCategory);
+  if (!isOpen) return null;
 
   // Shuffle headline
   const handleShuffle = () => {
-    const list = selectedCategory === 'all'
-      ? HEADLINE_VAULT
-      : HEADLINE_VAULT.filter(i => i.cat === selectedCategory);
+    const list = filteredHeadlines.length > 0 ? filteredHeadlines : ALL_HEADLINES;
     const item = list[Math.floor(Math.random() * list.length)];
     if (item) setSelectedHeadline(item.text);
   };
@@ -207,6 +163,9 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
               <h2 className="text-base sm:text-lg font-serif font-bold text-zinc-100">
                 নতুন ইমেজ প্রম্পট উইজার্ড
               </h2>
+              <span className="text-[10px] text-[#DFBA75] bg-[#DFBA75]/10 px-2 py-0.5 rounded-full border border-[#DFBA75]/20 font-mono">
+                ১,০০০+ লাইন লাইব্রেরি
+              </span>
             </div>
             <p className="text-[11px] text-zinc-400 mt-0.5">
               Cake Slice by Farjana • ৩টি সহজ ধাপে ৮K মাস্টার প্রম্পট তৈরি করুন
@@ -258,13 +217,16 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
         {/* MODAL BODY (Steps 1, 2, 3, 4) */}
         <div className="flex-1 overflow-y-auto py-5 space-y-4 pr-1">
 
-          {/* ================= STEP 1: SELECT BENGALI HEADLINE ================= */}
+          {/* ================= STEP 1: SELECT BENGALI HEADLINE (1000+ Unique Database) ================= */}
           {step === 1 && (
-            <div className="space-y-4 animate-fade-in">
+            <div className="space-y-3.5 animate-fade-in">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-100">
-                    পোস্টারের জন্য একটি আবেগঘন বাংলা লাইন বেছে নিন
+                  <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                    <span>পোস্টারের বাংলা লাইন বেছে নিন</span>
+                    <span className="text-[10px] text-zinc-500 font-normal">
+                      ({filteredHeadlines.length}টি পাওয়া গেছে)
+                    </span>
                   </h3>
                   <p className="text-[11px] text-zinc-400">
                     গ্রাহকের অনুভূতি ছুঁয়ে যাওয়ার মতো মিষ্টি ও আন্তরিক লাইন
@@ -273,7 +235,7 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
 
                 <button
                   onClick={handleShuffle}
-                  className="py-1.5 px-3 bg-[#1D1A25] hover:bg-[#282433] border border-[#DFBA75]/40 text-xs font-semibold text-[#DFBA75] rounded-xl flex items-center gap-1.5 transition-all"
+                  className="py-1 px-3 bg-[#1D1A25] hover:bg-[#282433] border border-[#DFBA75]/40 text-xs font-semibold text-[#DFBA75] rounded-xl flex items-center gap-1.5 transition-all"
                 >
                   <Shuffle className="w-3.5 h-3.5" />
                   <span>🎲 র‍্যান্ডম বদলান</span>
@@ -292,20 +254,41 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
                 />
               </div>
 
+              {/* Live Search Bar for 1000+ Lines */}
+              <div className="p-2 rounded-xl bg-[#16141B] border border-zinc-800 flex items-center gap-2">
+                <Search className="w-4 h-4 text-zinc-400 ml-1" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="১,০০০+ লাইনের মধ্যে সার্চ করুন (যেমন: ভালোবাসা, জন্মদিন, অভিমান, চকলেট, মা, আড্ডা...)"
+                  className="w-full bg-transparent text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="text-xs text-zinc-400 hover:text-white px-2">
+                    ✕
+                  </button>
+                )}
+              </div>
+
               {/* Category Filter Pills */}
               <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none">
                 {[
-                  { id: 'all', label: 'সব লাইন' },
+                  { id: 'all', label: 'সব (১,০০০+)' },
                   { id: 'love', label: '❤️ প্রিয়জন' },
                   { id: 'birthday', label: '🎂 জন্মদিন' },
                   { id: 'apology', label: '🥺 মান-অভিমান' },
                   { id: 'self', label: '☕ নিজের ট্রিট' },
                   { id: 'taste', label: '✨ খাঁটি স্বাদ' },
-                  { id: 'family', label: '👨‍👩‍👧 আড্ডা' }
+                  { id: 'family', label: '👨‍👩‍👧 পরিবার ও আড্ডা' },
+                  { id: 'anniversary', label: '💍 অ্যানিভার্সারি' }
                 ].map((cat) => (
                   <button
                     key={cat.id}
-                    onClick={() => setSelectedCategory(cat.id)}
+                    onClick={() => {
+                      setSelectedCategory(cat.id);
+                      setSearchQuery('');
+                    }}
                     className={`px-3 py-1 rounded-xl whitespace-nowrap transition-all ${
                       selectedCategory === cat.id
                         ? 'bg-[#DFBA75] text-black font-bold shadow-md'
@@ -317,24 +300,29 @@ The image is clean, highly aesthetic, completely devoid of clutter or random pro
                 ))}
               </div>
 
-              {/* Scrollable List */}
-              <div className="max-h-60 overflow-y-auto pr-1 space-y-2 scrollbar-thin">
-                {filteredHeadlines.map((item, idx) => (
+              {/* 1000+ Scrollable Lines Container */}
+              <div className="max-h-56 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
+                {filteredHeadlines.slice(0, 150).map((item, idx) => (
                   <button
                     key={idx}
                     onClick={() => setSelectedHeadline(item.text)}
-                    className={`w-full text-left p-2.5 rounded-xl text-xs transition-all border flex items-center justify-between ${
+                    className={`w-full text-left p-2 rounded-xl text-xs transition-all border flex items-center justify-between ${
                       selectedHeadline === item.text
                         ? 'bg-[#DFBA75]/15 border-[#DFBA75] text-[#DFBA75] font-semibold shadow-sm'
                         : 'bg-[#0E0D11] border-zinc-800/80 text-zinc-300 hover:border-zinc-700 hover:bg-[#15131A]'
                     }`}
                   >
-                    <span>“{item.text}”</span>
+                    <span className="truncate pr-2">“{item.text}”</span>
                     {selectedHeadline === item.text && (
                       <Check className="w-4 h-4 text-[#DFBA75] shrink-0" />
                     )}
                   </button>
                 ))}
+                {filteredHeadlines.length > 150 && (
+                  <div className="p-2 text-center text-[11px] text-zinc-500">
+                    আরও {filteredHeadlines.length - 150}টি লাইন রয়েছে (নির্দিষ্ট শব্দ লিখে সার্চ করুন)
+                  </div>
+                )}
               </div>
             </div>
           )}
